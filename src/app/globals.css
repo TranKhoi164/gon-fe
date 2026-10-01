@@ -1,0 +1,186 @@
+@import "tailwindcss";
+@import "prismjs/themes/prism-tomorrow.css";
+
+:root,
+.light {
+  /* Gọn Web Warm Editorial Palette (Modern UI Components / Warm Linen Cream) */
+  /* Layer nền dưới cùng của cả trang: Màu kem linen ấm dịu (#f3ece0) */
+  --background: #F8F4F0;
+  --foreground: #2d2420;
+
+  /* Primary: Nâu Caramel / Đất ấm sang trọng */
+  --primary: #8c6747;
+  --primary-hover: #755235;
+  --primary-soft: #f5ede1;
+  --on-primary: #ffffff;
+
+  /* Điểm nhấn Hổ phách ấm (Amber Gold) */
+  --accent-gold: #c8832a;
+  --accent-gold-soft: #faebd7;
+
+  /* Điểm nhấn Kem bơ ấm */
+  --butter-cream: #f6efe4;
+  --butter-surface: #faf5eb;
+  --butter-border: rgba(140, 103, 71, 0.08);
+  --sage-poster: #7a9480;
+
+  /* Các components / block / card chính: Màu kem nhạt hơn nền, ấm áp và KHÔNG dùng trắng thuần */
+  --surface: #FFFBF8;
+  --surface-secondary: #f7f1e6;
+  --surface-tertiary: #efe7d9;
+
+  /* Typography: Nâu than ấm dịu mắt */
+  --text-primary: #2d2420;
+  --text-secondary: #63574c;
+  --text-tertiary: #8f8274;
+
+  /* Thay viền cứng bằng viền siêu nhẹ mờ ảo (kết hợp bóng đổ) */
+  --border: rgba(60, 45, 30, 0.07);
+  --border-subtle: rgba(60, 45, 30, 0.04);
+
+  --error: #b84e46;
+  --error-soft: #fae8e6;
+  --warning: #c8832a;
+  --warning-soft: #faebd7;
+  --success: #527a5d;
+  --success-soft: #eaf2ec;
+}
+
+.dark {
+  /* Gọn Web Dark Roast / Warm Espresso Theme */
+  --background: #13100e;
+  --foreground: #f4eee7;
+
+  --primary: #c29267;
+  --primary-hover: #d2a47a;
+  --primary-soft: rgba(194, 146, 103, 0.16);
+  --on-primary: #13100e;
+
+  --accent-gold: #e2a84e;
+  --accent-gold-soft: rgba(226, 168, 78, 0.15);
+
+  --butter-cream: #221c18;
+  --butter-surface: #1e1916;
+  --butter-border: rgba(255, 255, 255, 0.06);
+  --sage-poster: #82a88d;
+
+  /* Block chính sáng hơn nền tối */
+  --surface: #201c18;
+  --surface-secondary: #27221e;
+  --surface-tertiary: #302a24;
+
+  --text-primary: #f4eee7;
+  --text-secondary: #b5aca0;
+  --text-tertiary: #847a6f;
+
+  --border: rgba(255, 255, 255, 0.05);
+  --border-subtle: rgba(255, 255, 255, 0.02);
+
+  --error: #df7068;
+  --error-soft: rgba(223, 112, 104, 0.15);
+  --warning: #e2a84e;
+  --warning-soft: rgba(226, 168, 78, 0.15);
+  --success: #6ea07c;
+  --success-soft: rgba(110, 160, 124, 0.15);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-on-primary: var(--on-primary);
+  --color-accent-gold: var(--accent-gold);
+  --color-accent-gold-soft: var(--accent-gold-soft);
+
+  --color-butter-cream: var(--butter-cream);
+  --color-butter-surface: var(--butter-surface);
+  --color-butter-border: var(--butter-border);
+  --color-sage-poster: var(--sage-poster);
+
+  --color-surface: var(--surface);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-tertiary: var(--surface-tertiary);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+
+  --color-error: var(--error);
+  --color-error-soft: var(--error-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+
+  /* Rounded geometry - gọn gàng, tinh tế theo Modern UI Components */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+}
+
+html,
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  min-height: 100vh;
+}
+
+/* Serif Display for Newsreader bold headings */
+.font-serif-display {
+  font-family: var(--font-serif-display), Newsreader, Georgia, serif;
+}
+
+/* Soft Warm Shadows thay cho border cứng */
+.shadow-warm-xs {
+  box-shadow: 0 1px 3px rgba(50, 40, 30, 0.04);
+}
+
+.shadow-warm-sm {
+  box-shadow: 0 3px 12px -2px rgba(50, 40, 30, 0.05), 0 1px 3px -1px rgba(50, 40, 30, 0.03);
+}
+
+.shadow-warm {
+  box-shadow: 0 8px 24px -4px rgba(50, 40, 30, 0.06), 0 2px 6px -1px rgba(50, 40, 30, 0.03);
+}
+
+.shadow-warm-lg {
+  box-shadow: 0 16px 40px -8px rgba(50, 40, 30, 0.08), 0 4px 12px -2px rgba(50, 40, 30, 0.04);
+}
+
+.dark .shadow-warm-xs {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dark .shadow-warm-sm {
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+
+.dark .shadow-warm {
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+.dark .shadow-warm-lg {
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.6);
+}
+
+/* Thẻ Card nổi phong cách Modern UI: nền sáng, không viền, bóng đổ mềm */
+.warm-panel {
+  background-color: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px -4px rgba(50, 38, 28, 0.07), 0 2px 8px -2px rgba(50, 38, 28, 0.04);
+}
+
+.dark .warm-panel {
+  background-color: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
