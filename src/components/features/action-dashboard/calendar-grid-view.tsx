@@ -21,9 +21,6 @@ import {
   Calendar as CalendarIcon,
   Plus,
   Sparkles,
-  Flame,
-  UserCheck,
-  Trash2,
   Clock,
   CheckCircle2,
 } from "lucide-react";
@@ -190,6 +187,14 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
     defaultView: "week",
     selectedDate: Temporal.Now.plainDateISO(),
     calendars: QUADRANTS_THEME,
+    dayBoundaries: {
+      start: "06:00",
+      end: "23:00",
+    },
+    weekOptions: {
+      gridHeight: 850,
+      gridStep: 60,
+    },
     callbacks: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onClickDateTime(dateTime: any) {
@@ -264,81 +269,67 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
 
   if (!isMounted) {
     return (
-      <Card className="w-full h-[650px] flex items-center justify-center bg-surface">
-        <div className="flex flex-col items-center gap-3 text-text-tertiary">
-          <CalendarIcon className="w-8 h-8 animate-pulse text-primary" />
-          <span className="text-xs font-semibold">Đang tải lịch biểu Schedule-X...</span>
+      <Card className="w-full h-[520px] flex items-center justify-center bg-surface rounded-xl border border-border">
+        <div className="flex flex-col items-center gap-2 text-text-tertiary">
+          <CalendarIcon className="w-7 h-7 animate-pulse text-primary" />
+          <span className="text-xs font-medium">Đang tải lịch biểu...</span>
         </div>
       </Card>
     );
   }
 
   return (
-    <Card className="w-full space-y-4 bg-surface p-4 sm:p-5 shadow-warm rounded-xl border border-border">
-      {/* Top Header & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border/60">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-serif-display font-bold text-text-primary flex items-center gap-2.5 tracking-tight">
-            <CalendarIcon className="w-5 h-5 text-primary stroke-[1.8]" />
-            <span>Lịch Biểu Timeboxing</span>
-          </h2>
-          <p className="text-xs text-text-secondary mt-0.5">
-            Bấm trực tiếp vào các khung giờ trên lịch để tạo nhiệm vụ tức thì theo phong cách Google Calendar
-          </p>
+    <Card className="w-full space-y-3 bg-surface p-3 sm:p-4 shadow-warm rounded-xl border border-border">
+      {/* Compact Unified Header Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-border/50">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+            <CalendarIcon className="w-4 h-4 text-primary stroke-[2]" />
+          </div>
+          <div>
+            <h3 className="text-sm sm:text-base font-serif-display font-bold text-text-primary leading-tight">
+              Lịch Biểu Timeboxing
+            </h3>
+            <p className="text-[11px] text-text-tertiary hidden sm:block">
+              Bấm trực tiếp vào các ô giờ để lên lịch nhiệm vụ tức thì
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {/* Prominent Gọn Styled Create Button */}
+        {/* Inline Matrix Legend & Action Button */}
+        <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
+          <div className="flex items-center gap-2.5 text-[11px] font-medium text-text-secondary overflow-x-auto py-0.5">
+            <span className="flex items-center gap-1.5 shrink-0" title="Quan trọng & Lên lịch (+30 XP)">
+              <span className="w-2 h-2 rounded-full bg-[#c8832a]" />
+              <span>Gold Zone</span>
+            </span>
+            <span className="flex items-center gap-1.5 shrink-0" title="Khẩn cấp & Quan trọng (+20 XP)">
+              <span className="w-2 h-2 rounded-full bg-[#b84e46]" />
+              <span>Do First</span>
+            </span>
+            <span className="flex items-center gap-1.5 shrink-0" title="Khẩn cấp & Ủy quyền (+10 XP)">
+              <span className="w-2 h-2 rounded-full bg-[#527a5d]" />
+              <span>Delegate</span>
+            </span>
+            <span className="flex items-center gap-1.5 shrink-0" title="Loại bỏ / Việc vặt (+5 XP)">
+              <span className="w-2 h-2 rounded-full bg-[#7c7267]" />
+              <span>Eliminate</span>
+            </span>
+          </div>
+
           <button
             type="button"
             onClick={() => onOpenCreateModal?.()}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-hover text-on-primary font-medium text-xs rounded-md shadow-warm-xs hover:shadow-warm transition-all active:scale-95 shrink-0"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2]" />
-            <span>Tạo công việc mới</span>
+            <span>Tạo công việc</span>
           </button>
         </div>
       </div>
 
-      {/* Eisenhower Matrix Legend Chips */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-        <span className="text-[11px] font-semibold text-text-tertiary whitespace-nowrap uppercase tracking-wider">
-          Màu theo ma trận:
-        </span>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge
-            variant="gold"
-            className="flex items-center gap-1.5 text-[11px] font-medium py-1 px-2.5 bg-accent-gold-soft text-accent-gold border border-accent-gold/20 rounded-md"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-accent-gold stroke-[1.8]" />
-            <span>Gold Zone (+30 XP)</span>
-          </Badge>
-          <Badge
-            variant="red"
-            className="flex items-center gap-1.5 text-[11px] font-medium py-1 px-2.5 bg-[#fae8e6] text-[#b84e46] dark:bg-[#381a17] dark:text-[#df7068] border border-[#b84e46]/20 rounded-md"
-          >
-            <Flame className="w-3.5 h-3.5 text-[#b84e46] dark:text-[#df7068] stroke-[1.8]" />
-            <span>Do First (+20 XP)</span>
-          </Badge>
-          <Badge
-            variant="primary"
-            className="flex items-center gap-1.5 text-[11px] font-medium py-1 px-2.5 bg-[#eaf2ec] text-[#527a5d] dark:bg-[#1a2b1f] dark:text-[#6ea07c] border border-[#527a5d]/20 rounded-md"
-          >
-            <UserCheck className="w-3.5 h-3.5 text-[#527a5d] dark:text-[#6ea07c] stroke-[1.8]" />
-            <span>Delegate (+10 XP)</span>
-          </Badge>
-          <Badge
-            variant="slate"
-            className="flex items-center gap-1.5 text-[11px] font-medium py-1 px-2.5 bg-[#f2ede4] text-[#7c7267] dark:bg-[#28231f] dark:text-[#9e9488] border border-[#7c7267]/20 rounded-md"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-[#7c7267] dark:text-[#9e9488] stroke-[1.8]" />
-            <span>Eliminate (+5 XP)</span>
-          </Badge>
-        </div>
-      </div>
-
       {/* Schedule-X Calendar Wrapper */}
-      <div className="w-full overflow-hidden rounded-xl border border-border shadow-warm-xs bg-surface min-h-[700px]">
+      <div className="w-full overflow-hidden rounded-lg border border-border/80 shadow-warm-xs bg-surface min-h-[520px]">
         {calendar && <ScheduleXCalendar calendarApp={calendar} />}
       </div>
 
