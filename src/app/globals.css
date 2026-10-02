@@ -81,7 +81,6 @@
   --warning: #e2a84e;
   --warning-soft: rgba(226, 168, 78, 0.15);
   --success: #6ea07c;
-  --success-soft: rgba(110, 160, 124, 0.15);
 }
 
 @theme inline {
@@ -182,5 +181,7 @@ body {
 .dark .warm-panel {
   background-color: var(--surface);
   border-radius: 12px;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
 }
+
+
+

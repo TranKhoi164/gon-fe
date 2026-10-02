@@ -1,0 +1,330 @@
+/* ==========================================================================
+   Schedule-X Calendar Custom Theme — Gọn Warm Minimalist & Modern Editorial
+   ========================================================================== */
+
+:root {
+  /* Schedule-X Theme Overrides (Warm Earth / Caramel #8c6747) */
+  --sx-color-primary: #8c6747;
+  --sx-color-on-primary: #ffffff;
+  --sx-color-primary-container: #f5ede1;
+  --sx-color-on-primary-container: #4a321f;
+  --sx-color-secondary: #c8832a;
+  --sx-color-on-secondary: #ffffff;
+  --sx-color-secondary-container: #faebd7;
+  --sx-color-on-secondary-container: #5c350a;
+  --sx-color-tertiary: #7c7267;
+  --sx-color-on-tertiary: #ffffff;
+  --sx-color-tertiary-container: #f2ede4;
+  --sx-color-on-tertiary-container: #2b2520;
+  --sx-color-surface: #FFFBF8;
+  --sx-color-surface-dim: #f7f1e6;
+  --sx-color-surface-bright: #FFFBF8;
+  --sx-color-surface-container-lowest: #FFFBF8;
+  --sx-color-surface-container-low: #f7f1e6;
+  --sx-color-surface-container: #efe7d9;
+  --sx-color-surface-container-high: #e5dcce;
+  --sx-color-surface-container-highest: #dbd1c2;
+  --sx-color-on-surface: #2d2420;
+  --sx-color-on-surface-variant: #63574c;
+  --sx-color-outline: rgba(60, 45, 30, 0.12);
+  --sx-color-outline-variant: rgba(60, 45, 30, 0.06);
+  --sx-color-background: #FFFBF8;
+  --sx-color-on-background: #2d2420;
+  --sx-color-neutral: #8f8274;
+  --sx-color-neutral-variant: #63574c;
+  --sx-internal-color-text: #2d2420;
+  --sx-internal-color-light-gray: #f7f1e6;
+  --sx-border: 1px solid rgba(60, 45, 30, 0.07);
+  --sx-rounding-extra-small: 4px;
+  --sx-rounding-small: 6px;
+  --sx-rounding-extra-large: 8px;
+}
+
+.dark {
+  /* Schedule-X Dark Roast / Warm Espresso Theme Overrides */
+  --sx-color-primary: #c29267;
+  --sx-color-on-primary: #13100e;
+  --sx-color-primary-container: rgba(194, 146, 103, 0.2);
+  --sx-color-on-primary-container: #f4eee7;
+  --sx-color-secondary: #e2a84e;
+  --sx-color-on-secondary: #13100e;
+  --sx-color-secondary-container: rgba(226, 168, 78, 0.2);
+  --sx-color-on-secondary-container: #faebd7;
+  --sx-color-tertiary: #9e9488;
+  --sx-color-on-tertiary: #13100e;
+  --sx-color-tertiary-container: #28231f;
+  --sx-color-on-tertiary-container: #e7e2db;
+  --sx-color-surface: #201c18;
+  --sx-color-surface-dim: #1a1614;
+  --sx-color-surface-bright: #27221e;
+  --sx-color-surface-container-lowest: #181412;
+  --sx-color-surface-container-low: #221d19;
+  --sx-color-surface-container: #28231f;
+  --sx-color-surface-container-high: #302a24;
+  --sx-color-surface-container-highest: #3a322c;
+  --sx-color-on-surface: #f4eee7;
+  --sx-color-on-surface-variant: #b5aca0;
+  --sx-color-outline: rgba(255, 255, 255, 0.10);
+  --sx-color-outline-variant: rgba(255, 255, 255, 0.05);
+  --sx-color-background: #201c18;
+  --sx-color-on-background: #f4eee7;
+  --sx-color-neutral: #847a6f;
+  --sx-color-neutral-variant: #b5aca0;
+  --sx-internal-color-text: #f4eee7;
+  --sx-internal-color-light-gray: #27221e;
+  --sx-border: 1px solid rgba(255, 255, 255, 0.05);
+  --sx-rounding-extra-small: 4px;
+  --sx-rounding-small: 6px;
+  --sx-rounding-extra-large: 8px;
+}
+
+/* Wrapper */
+.sx-react-calendar-wrapper {
+  width: 100%;
+  height: 750px;
+  max-height: 80vh;
+}
+
+.sx__calendar {
+  font-family: inherit !important;
+  border: none !important;
+  background-color: var(--surface) !important;
+  color: var(--text-primary) !important;
+  border-radius: 12px !important;
+}
+
+/* Calendar Header */
+.sx__calendar-header {
+  border-bottom: 1px solid var(--border) !important;
+  padding: 12px 18px !important;
+  background-color: var(--surface) !important;
+  gap: 12px !important;
+}
+
+.sx__range-heading {
+  font-family: var(--font-serif-display), Newsreader, Georgia, serif !important;
+  font-size: 1.15rem !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+  letter-spacing: -0.02em !important;
+}
+
+.sx__forward-backward-navigation {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.sx__forward-backward-navigation button,
+.sx__chevron-button {
+  background-color: var(--surface-secondary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  color: var(--text-secondary) !important;
+  width: 32px !important;
+  height: 32px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.15s ease !important;
+}
+
+.sx__forward-backward-navigation button:hover,
+.sx__chevron-button:hover {
+  background-color: var(--surface-tertiary) !important;
+  color: var(--text-primary) !important;
+}
+
+.sx__today-button {
+  background-color: var(--surface-secondary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  color: var(--text-primary) !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  padding: 6px 14px !important;
+  height: 32px !important;
+  transition: all 0.15s ease !important;
+}
+
+.sx__today-button:hover {
+  background-color: var(--surface-tertiary) !important;
+}
+
+/* View selection switcher */
+.sx__view-selection {
+  background-color: var(--surface-secondary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  color: var(--text-primary) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 6px 12px !important;
+  cursor: pointer !important;
+}
+
+.sx__view-selection:hover {
+  background-color: var(--surface-tertiary) !important;
+}
+
+.sx__view-selection-items {
+  background-color: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px -4px rgba(50, 40, 30, 0.08) !important;
+  color: var(--text-primary) !important;
+}
+
+.sx__view-selection-item {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+}
+
+.sx__view-selection-item:hover,
+.sx__view-selection-item.is-selected {
+  background-color: var(--surface-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Time Grid & Axis */
+.sx__time-grid {
+  border-color: var(--border-subtle) !important;
+  background-color: var(--surface) !important;
+}
+
+.sx__time-grid-day {
+  border-right: 1px solid var(--border-subtle) !important;
+}
+
+.sx__time-grid-day:hover {
+  background-color: rgba(140, 103, 71, 0.015);
+}
+
+.sx__time-grid-time-axis {
+  border-right: 1px solid var(--border-subtle) !important;
+  background-color: var(--surface) !important;
+}
+
+.sx__time-grid-time-axis-element {
+  color: var(--text-tertiary) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+/* Week Grid Day Headers */
+.sx__week-grid__day-name,
+.sx__week-grid__date--is-today .sx__week-grid__day-name {
+  color: var(--text-tertiary) !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+  font-weight: 600 !important;
+}
+
+.sx__week-grid__date--is-today .sx__week-grid__day-name {
+  color: var(--primary) !important;
+  font-weight: 700 !important;
+}
+
+.sx__week-grid__day-number {
+  color: var(--text-primary) !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+}
+
+/* Today date badge: crisp 6px rounded, NOT a 50% circle */
+.sx__week-grid__date--is-today .sx__week-grid__date-number,
+.sx__week-grid__day--is-today .sx__week-grid__day-number,
+.sx__is-today .sx__week-grid__day-number,
+.sx__month-grid-day__header-date.sx__is-today {
+  background-color: var(--primary) !important;
+  color: var(--on-primary) !important;
+  border-radius: 6px !important;
+  padding: 1px 6px !important;
+  width: auto !important;
+  min-width: 24px !important;
+  height: 24px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Current time indicator line */
+.sx__current-time-indicator {
+  background-color: var(--accent-gold) !important;
+  height: 2px !important;
+  z-index: 10 !important;
+}
+
+.sx__current-time-indicator-circle {
+  background-color: var(--accent-gold) !important;
+  border: 2px solid var(--surface) !important;
+  border-radius: 3px !important;
+  width: 7px !important;
+  height: 7px !important;
+}
+
+/* Events Styling - Crisp 6px rounding */
+.sx__time-grid-event,
+.sx__date-grid-event {
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+  font-size: 11.5px !important;
+  box-shadow: 0 1px 3px rgba(50, 40, 30, 0.04) !important;
+  cursor: pointer !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+  border: 1px solid rgba(60, 45, 30, 0.06) !important;
+  padding: 3px 6px !important;
+}
+
+.sx__time-grid-event:hover,
+.sx__date-grid-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(50, 40, 30, 0.08) !important;
+}
+
+/* Drag selection / Preview when clicking a slot */
+.sx__time-grid-drag-selection,
+.sx__time-grid-event-ghost,
+.sx__draw-preview {
+  background-color: var(--primary-soft) !important;
+  border: 1.5px dashed var(--primary) !important;
+  border-radius: 6px !important;
+  color: var(--primary) !important;
+}
+
+/* Month Grid View */
+.sx__month-grid-day {
+  border-color: var(--border-subtle) !important;
+  background-color: var(--surface) !important;
+  color: var(--text-primary) !important;
+}
+
+.sx__month-grid-day__header-day-number {
+  color: var(--text-secondary) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.sx__month-grid-day--is-today .sx__month-grid-day__header-day-number {
+  background-color: var(--primary) !important;
+  color: var(--on-primary) !important;
+  border-radius: 6px !important;
+  padding: 1px 5px !important;
+}
+
+/* Date picker popup */
+.sx__date-picker-popup {
+  background-color: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--shadow-warm-lg) !important;
+}
+
+.sx__date-picker__day.sx__date-picker__day--selected,
+.sx__date-picker__day.sx__date-picker__day--today {
+  background-color: var(--primary) !important;
+  color: var(--on-primary) !important;
+  border-radius: 6px !important;
+}

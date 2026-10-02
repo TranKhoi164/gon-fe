@@ -1,9 +1,23 @@
 'use client';
 
-import React from 'react';
+import dynamic from 'next/dynamic';
 import { Sidebar } from '@/components/shared/sidebar';
-import { NotionBlockEditor } from '@/components/features/notes/notion-block-editor';
 import { ExtractTasksModal } from '@/components/features/notes/extract-tasks-modal';
+
+const NotionBlockEditor = dynamic(
+  () =>
+    import('@/components/features/notes/notion-block-editor').then(
+      (m) => m.NotionBlockEditor
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full flex items-center justify-center bg-surface rounded-xl text-text-tertiary text-xs">
+        Đang tải trình soạn thảo BlockNote...
+      </div>
+    ),
+  }
+);
 import { useNotesPage } from '@/hooks/useNotesPage';
 import { CheckCircle2 } from 'lucide-react';
 

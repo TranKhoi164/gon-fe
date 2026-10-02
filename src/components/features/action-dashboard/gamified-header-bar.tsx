@@ -52,7 +52,7 @@ export const GamifiedHeaderBar: React.FC<GamifiedHeaderBarProps> = ({
               <Award className="w-3.5 h-3.5" />
               <span>Level {stats.level}</span>
             </Badge>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300">
               <Shield className="w-3.5 h-3.5" />
               <span>{stats.tierTitle || "Tập sự kỷ luật"}</span>
             </span>
@@ -114,8 +114,8 @@ export const GamifiedHeaderBar: React.FC<GamifiedHeaderBarProps> = ({
             Perfect Day
           </p>
           <div className="flex items-center justify-center xl:justify-start gap-1.5 mt-0.5">
-            <Sparkles className="w-4 h-4 text-violet-600 dark:text-violet-400 stroke-[2]" />
-            <span className="text-base font-black text-violet-600 dark:text-violet-400">
+            <Sparkles className="w-4 h-4 text-accent-gold stroke-[2]" />
+            <span className="text-base font-black text-accent-gold">
               {stats.perfectDayStreak || 0} Ngày
             </span>
           </div>

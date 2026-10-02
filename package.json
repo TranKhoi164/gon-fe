@@ -9,6 +9,12 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@blocknote/core": "^0.55.0",
+    "@blocknote/mantine": "^0.55.0",
+    "@blocknote/react": "^0.55.0",
+    "@schedule-x/calendar": "^4.9.1",
+    "@schedule-x/react": "^4.1.0",
+    "@schedule-x/theme-default": "^4.9.1",
     "axios": "^1.20.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.49.0",
@@ -17,6 +23,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "tailwind-merge": "^3.7.0",
+    "temporal-polyfill": "^0.3.2",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

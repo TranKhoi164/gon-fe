@@ -11,6 +11,8 @@ import { BatchingBucket } from "@/components/features/action-dashboard/batching-
 import { FastCaptureModal } from "@/components/features/action-dashboard/fast-capture-modal";
 import { RewardsModal } from "@/components/features/action-dashboard/rewards-modal";
 import { LayoutGrid, Calendar, Sparkles } from "lucide-react";
+import { GoogleCalendarTaskModal } from "@/components/features/action-dashboard/google-calendar-task-modal";
+import { RecurrenceConfig } from "@/types/recurrence.types";
 
 import { dashboardService } from "@/services/dashboardService";
 import {
@@ -54,6 +56,24 @@ export default function ActionDashboardPage() {
   const [isFastCaptureOpen, setIsFastCaptureOpen] = useState(false);
   const [isRewardsModalOpen, setIsRewardsModalOpen] = useState(false);
   const [xpToast, setXpToast] = useState<{ message: string } | null>(null);
+
+  const [isGoogleTaskModalOpen, setIsGoogleTaskModalOpen] = useState(false);
+  const [googleModalInitialData, setGoogleModalInitialData] = useState<{
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    quadrant?: EisenhowerQuadrant;
+  }>({});
+
+  const handleOpenGoogleTaskModal = (initialData?: {
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    quadrant?: EisenhowerQuadrant;
+  }) => {
+    setGoogleModalInitialData(initialData || {});
+    setIsGoogleTaskModalOpen(true);
+  };
 
   // Show floating XP reward notification toast
   const triggerXpToast = (message: string) => {
@@ -239,6 +259,70 @@ export default function ActionDashboardPage() {
     triggerXpToast(TOAST_MESSAGES.TASK_CREATED);
   };
 
+  const handleSaveGoogleTask = async ({
+    title,
+    description,
+    type,
+    quadrant,
+    scheduledDate,
+    startTime,
+    endTime,
+    estimatedMinutes,
+    recurrenceSummary,
+    recurringDates,
+  }: {
+    title: string;
+    description?: string;
+    type: TaskType;
+    quadrant: EisenhowerQuadrant;
+    scheduledDate: string;
+    startTime: string;
+    endTime: string;
+    estimatedMinutes: number;
+    recurrence?: RecurrenceConfig | null;
+    recurrenceSummary?: string;
+    recurringDates?: string[];
+  }) => {
+    const fullDesc = recurrenceSummary
+      ? description
+        ? `🔁 ${recurrenceSummary}\n\n${description}`
+        : `🔁 ${recurrenceSummary}`
+      : description;
+
+    const dates = recurringDates && recurringDates.length > 0 ? recurringDates : [scheduledDate];
+
+    // Concurrently create all recurring task instances
+    const createdTasks = await Promise.all(
+      dates.map((d) =>
+        dashboardService.createTask({
+          title,
+          description: fullDesc,
+          type,
+          quadrant,
+          scheduledDate: d,
+          startTime,
+          endTime,
+          estimatedMinutes,
+        })
+      )
+    );
+
+    if (type === TaskTypeEnum.BATCHING) {
+      setBatchingTasks((prev) => [...prev, ...createdTasks]);
+    } else {
+      setEisenhowerData((prev) => ({
+        ...prev,
+        [quadrant]: [...prev[quadrant], ...createdTasks],
+      }));
+    }
+
+    triggerXpToast(
+      dates.length > 1
+        ? `Đã tạo ${dates.length} công việc lặp lại thành công!`
+        : TOAST_MESSAGES.TASK_CREATED
+    );
+  };
+
   const handleMoveToBatching = (task: Task) => {
     // Remove from Eliminate quadrant
     setEisenhowerData((prev) => ({
@@ -370,13 +454,14 @@ export default function ActionDashboardPage() {
             <EisenhowerMatrix
               data={eisenhowerData}
               onToggleTaskStatus={handleToggleTaskStatus}
-              onAddTask={(title, q, desc) =>
-                handleAddTask(title, TaskTypeEnum.EISENHOWER, q, desc)
-              }
               onMoveToBatching={handleMoveToBatching}
+              onOpenCreateModal={(q) => handleOpenGoogleTaskModal({ quadrant: q })}
             />
           ) : (
-            <CalendarGridView tasks={allCalendarTasks} />
+            <CalendarGridView
+              tasks={allCalendarTasks}
+              onOpenCreateModal={handleOpenGoogleTaskModal}
+            />
           )}
 
           {/* Bottom Grid: Daily Habits & Batching Bucket */}
@@ -395,6 +480,17 @@ export default function ActionDashboardPage() {
             />
           </div>
         </main>
+
+      {/* Google Calendar Styled Task Modal with Eisenhower & Recurrence */}
+      <GoogleCalendarTaskModal
+        isOpen={isGoogleTaskModalOpen}
+        onClose={() => setIsGoogleTaskModalOpen(false)}
+        onSaveTask={handleSaveGoogleTask}
+        initialDate={googleModalInitialData.date}
+        initialStartTime={googleModalInitialData.startTime}
+        initialEndTime={googleModalInitialData.endTime}
+        initialQuadrant={googleModalInitialData.quadrant}
+      />
 
       {/* Global Fast Capture Modal (Ctrl+K) */}
       <FastCaptureModal

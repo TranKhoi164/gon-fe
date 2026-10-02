@@ -15,6 +15,26 @@ interface ExtractTasksModalProps {
   onSuccess: (extractedCount: number) => void;
 }
 
+function getTodoBlockTitle(b: NotionBlock): string {
+  if (b.properties?.title && b.properties.title.trim()) {
+    return b.properties.title.trim();
+  }
+  const rawContent = (b as unknown as { content?: unknown }).content;
+  if (Array.isArray(rawContent)) {
+    return rawContent
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object' && 'text' in item && typeof item.text === 'string') {
+          return item.text;
+        }
+        return '';
+      })
+      .join('')
+      .trim();
+  }
+  return '';
+}
+
 export const ExtractTasksModal: React.FC<ExtractTasksModalProps> = ({
   pageId,
   pageTitle,
@@ -23,7 +43,10 @@ export const ExtractTasksModal: React.FC<ExtractTasksModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const todoBlocks = blocks.filter((b) => b.type === 'to_do' && b.properties?.title?.trim());
+  const todoBlocks = blocks.filter((b) => {
+    const isTodo = b.type === 'to_do' || (b.type as string) === 'checkListItem';
+    return isTodo && Boolean(getTodoBlockTitle(b));
+  });
   const [selectedIds, setSelectedIds] = useState<string[]>(todoBlocks.map((b) => b.id));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -128,7 +151,7 @@ export const ExtractTasksModal: React.FC<ExtractTasksModalProps> = ({
                       onChange={() => toggleSelect(b.id)}
                       className="w-4 h-4 rounded text-primary accent-primary cursor-pointer"
                     />
-                    <span className="flex-1 truncate">{b.properties?.title}</span>
+                    <span className="flex-1 truncate">{getTodoBlockTitle(b)}</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-gold-soft text-accent-gold font-semibold shrink-0">
                       Gold Zone
                     </span>

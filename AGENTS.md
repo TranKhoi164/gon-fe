@@ -63,6 +63,7 @@ fe-core/
 │   ├── lib/                # Third-party Library wrappers & Instances (axios, fetcher, cn utility)
 │   ├── services/           # Tầng gọi API / Data Fetching layer (Connect sang api-core)
 │   ├── store/              # Client State Management (Zustand, React Context...)
+│   ├── styling/            # Custom CSS stylesheets độc lập (override theme thư viện: schedule-x, blocknote...)
 │   ├── types/              # Type Definitions & TypeScript Interfaces (API Request/Response schemas)
 │   └── utils/              # Helper functions nguyên bản (date formatting, currency, string helpers)
 │
@@ -105,6 +106,21 @@ fe-core/
   - `src/config/`: Cấu hình hệ thống, app metadata, navigation links, biến môi trường.
   - `src/constants/`: Các hằng số cố định, nhãn giao diện dùng chung, danh sách static options, API endpoints.
   - `src/types/` hoặc `src/constants/`: Các kiểu dữ liệu `enum`, TypeScript union types.
+
+### 3.6. Quy Tắc Phân Tách File Khi Số Lượng Code Lớn (File Splitting & Modularization Policy)
+- **Giới hạn độ dài và độ phức tạp của file**:
+  - Tránh viết các file "monolithic" vượt quá ~250–300 dòng code gánh quá nhiều trách nhiệm.
+  - Khi một Component, Hook, Service hay Stylesheet phình to, cần chủ động phân tách thành các file mô-đun nhỏ hơn theo nguyên tắc Single Responsibility.
+- **Tách Style Thư Viện Bên Thứ Ba ra thư mục `src/styling/`**:
+  - **TUYỆT ĐỐI KHÔNG** gom hàng trăm dòng CSS override của các thư viện bên ngoài (ví dụ: `@schedule-x/calendar`, `@blocknote/react`, `@mantine`, v.v.) vào `globals.css`.
+  - Phải tách riêng thành các file `.css` chuyên biệt trong thư mục `src/styling/` (ví dụ: `src/styling/schedule-x.css`, `src/styling/blocknote.css`) và chỉ `import` tại đúng component/feature sử dụng hoặc layout liên quan.
+  - `globals.css` chỉ giữ vai trò định nghĩa Design Tokens cốt lõi (`@theme inline`), cấu hình biến màu chung của toàn website (`:root`, `.dark`), font chữ và base layout reset.
+- **Tách Sub-components cho các Feature UI lớn**:
+  - Khi xây dựng Modal phức tạp, Dashboard Grid, Ma trận hoặc Form nhiều bước, hãy bóc tách các sub-components (như Header, Footer, Toolbar, Item Cards, Dialogs con) thành các file riêng trong cùng thư mục feature (ví dụ: `src/components/features/<feature>/...`).
+- **Tách Types, Enums & Hằng số**:
+  - Không định nghĩa hàng loạt TypeScript Interfaces hoặc Enum chung trong cùng file component. Hãy chuyển vào `src/types/<feature>.types.ts` và `src/constants/<feature>.constants.ts` hoặc `enums.ts`.
+- **Tách Business Logic & Helpers**:
+  - Các hàm xử lý ngày tháng, thuật toán lặp lại (recurrence), tính điểm gamification, parse dữ liệu... phải được tách ra `src/utils/` hoặc đóng gói thành Custom Hooks trong `src/hooks/`.
 
 ---
 

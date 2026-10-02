@@ -9,8 +9,6 @@ import {
 import { EISENHOWER_QUADRANTS_CONFIG } from "@/constants/dashboard.constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   LayoutGrid,
   Calendar,
@@ -23,32 +21,18 @@ import {
 export interface EisenhowerMatrixProps {
   data: EisenhowerMatrixData;
   onToggleTaskStatus: (taskId: string, currentStatus: string) => Promise<void>;
-  onAddTask: (title: string, quadrant: EisenhowerQuadrant, description?: string) => Promise<void>;
+  onAddTask?: (title: string, quadrant: EisenhowerQuadrant, description?: string) => Promise<void>;
   onMoveToBatching?: (task: Task) => void;
+  onOpenCreateModal?: (quadrant?: EisenhowerQuadrant) => void;
 }
 
 export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
   data,
   onToggleTaskStatus,
-  onAddTask,
   onMoveToBatching,
+  onOpenCreateModal,
 }) => {
-  const [addingQuadrant, setAddingQuadrant] = useState<EisenhowerQuadrant | null>(null);
-  const [newTitle, setNewTitle] = useState("");
-  const [newDesc, setNewDesc] = useState("");
   const [loadingTaskId, setLoadingTaskId] = useState<string | null>(null);
-
-  const handleCreateTask = async (quadrant: EisenhowerQuadrant) => {
-    if (!newTitle.trim()) return;
-    try {
-      await onAddTask(newTitle.trim(), quadrant, newDesc.trim() || undefined);
-      setNewTitle("");
-      setNewDesc("");
-      setAddingQuadrant(null);
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   const handleToggle = async (taskId: string, currentStatus: string) => {
     setLoadingTaskId(taskId);
@@ -61,16 +45,27 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      {/* Header with Title and Dedicated Separate Create Task Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface p-4 sm:p-5 rounded-xl shadow-warm border border-border">
         <div>
-          <h2 className="text-2xl font-serif-display font-bold text-text-primary flex items-center gap-2.5 tracking-tight">
-            <LayoutGrid className="w-5 h-5 text-primary stroke-[2]" />
+          <h2 className="text-xl sm:text-2xl font-serif-display font-bold text-text-primary flex items-center gap-2.5 tracking-tight">
+            <LayoutGrid className="w-5 h-5 text-primary stroke-[1.8]" />
             <span>Ma Trận 4 Ô Eisenhower</span>
           </h2>
           <p className="text-xs text-text-secondary mt-0.5">
-            Ưu tiên làm trước <span className="font-bold text-amber-600 dark:text-amber-400">Gold Zone</span> để gặt hái thành tựu đột phá và nhận thêm điểm thưởng XP
+            Ưu tiên làm trước <span className="font-semibold text-accent-gold">Gold Zone</span> để gặt hái thành tựu đột phá và nhận thêm điểm thưởng XP
           </p>
         </div>
+
+        {/* Dedicated Separate Create Task Button */}
+        <button
+          type="button"
+          onClick={() => onOpenCreateModal?.()}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-hover text-on-primary font-medium text-xs rounded-md shadow-warm-xs hover:shadow-warm transition-all active:scale-95 shrink-0"
+        >
+          <Plus className="w-3.5 h-3.5 stroke-[2]" />
+          <span>Tạo công việc mới</span>
+        </button>
       </div>
 
       {/* 4 Quadrants Grid */}
@@ -83,23 +78,34 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
             <Card
               key={config.key}
               variant={isGold ? "goldZone" : "default"}
-              className="flex flex-col justify-between space-y-4 min-h-[290px] transition-all"
+              className="flex flex-col justify-between space-y-4 min-h-[300px] transition-all rounded-xl p-4 sm:p-5 border border-border"
             >
-              {/* Header Quadrant */}
-              <div className="space-y-1 pb-1">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-text-primary flex items-center gap-1.5">
+              {/* Header Quadrant with Add Button */}
+              <div className="space-y-1.5 pb-2 border-b border-border/50">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-bold text-text-primary flex items-center gap-1.5 truncate font-serif-display">
                     <span>{config.title}</span>
                   </h3>
-                  <Badge variant={isGold ? "gold" : "primary"} className="font-bold text-xs">
-                    {config.xpBonusText}
-                  </Badge>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant={isGold ? "gold" : "primary"} className="font-medium text-[11px] rounded-md">
+                      {config.xpBonusText}
+                    </Badge>
+                    {/* Clean Add Button for this Quadrant */}
+                    <button
+                      type="button"
+                      onClick={() => onOpenCreateModal?.(config.key)}
+                      title={`Tạo công việc vào ${config.title}`}
+                      className="p-1 rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-tertiary transition-colors"
+                    >
+                      <Plus className="w-4 h-4 stroke-[1.8]" />
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs text-text-tertiary">{config.subtitle}</p>
+                <p className="text-xs text-text-tertiary line-clamp-1">{config.subtitle}</p>
               </div>
 
               {/* Task List */}
-              <div className="space-y-2 flex-1 my-2 overflow-y-auto max-h-[240px] pr-1">
+              <div className="space-y-2 flex-1 my-2 overflow-y-auto max-h-[280px] pr-1">
                 {tasks.map((task) => {
                   const isDone = task.status === "COMPLETED";
                   const isLoading = loadingTaskId === task.id;
@@ -107,12 +113,12 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
                   return (
                     <div
                       key={task.id}
-                      className={`p-3 rounded-xl transition-all flex items-start gap-3 group ${
+                      className={`p-3 rounded-lg transition-all flex items-start gap-3 group ${
                         isDone
                           ? "bg-surface-secondary/40 opacity-60 line-through text-text-tertiary"
                           : isGold
-                          ? "bg-amber-500/10 text-text-primary shadow-warm-xs hover:shadow-warm"
-                          : "bg-surface-secondary/80 text-text-primary hover:bg-surface-secondary shadow-warm-xs"
+                          ? "bg-accent-gold-soft/60 text-text-primary shadow-warm-xs hover:shadow-warm border border-accent-gold/20"
+                          : "bg-surface-secondary/70 text-text-primary hover:bg-surface-secondary shadow-warm-xs border border-border"
                       }`}
                     >
                       <input
@@ -120,7 +126,7 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
                         checked={isDone}
                         disabled={isLoading}
                         onChange={() => handleToggle(task.id, task.status)}
-                        className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer transition-transform active:scale-95"
+                        className="mt-0.5 w-4 h-4 rounded border-border accent-primary text-primary focus:ring-primary cursor-pointer disabled:opacity-50"
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold leading-snug break-words">
@@ -134,10 +140,10 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
 
                         <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[11px] text-text-tertiary">
                           {task.scheduledDate ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-tertiary border border-border-subtle">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-tertiary border border-border-subtle font-medium">
                               <Calendar className="w-3 h-3 text-text-tertiary" />
                               <span>{task.scheduledDate}</span>
-                              {task.startTime && task.endTime ? ` (${task.startTime} - ${task.endTime})` : ""}
+                              {task.startTime && task.endTime ? ` (${task.startTime} – ${task.endTime})` : ""}
                             </span>
                           ) : null}
                           {task.estimatedMinutes ? (
@@ -150,9 +156,9 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
                       </div>
 
                       {/* Right Tag / Actions */}
-                      <div className="flex items-center gap-1.5 self-center">
+                      <div className="flex items-center gap-1.5 self-center shrink-0">
                         {isGold && !isDone ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full bg-accent-gold-soft border border-accent-gold/40">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-md bg-accent-gold-soft border border-accent-gold/40">
                             <Sparkles className="w-3 h-3" />
                             <span>+30 XP</span>
                           </span>
@@ -178,57 +184,6 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
                     Chưa có công việc nào trong ô này.
                   </div>
                 ) : null}
-              </div>
-
-              {/* Quick Add Task to Quadrant */}
-              <div className="pt-1">
-                {addingQuadrant === config.key ? (
-                  <div className="space-y-2 p-2.5 rounded-xl bg-surface-secondary border border-border">
-                    <Input
-                      placeholder="Tên công việc cần làm..."
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) handleCreateTask(config.key);
-                      }}
-                      autoFocus
-                    />
-                    <Input
-                      placeholder="Mô tả bổ sung hoặc ghi chú (tùy chọn)..."
-                      value={newDesc}
-                      onChange={(e) => setNewDesc(e.target.value)}
-                      className="text-xs"
-                    />
-                    <div className="flex items-center justify-end gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setAddingQuadrant(null);
-                          setNewTitle("");
-                          setNewDesc("");
-                        }}
-                      >
-                        Hủy
-                      </Button>
-                      <Button size="sm" onClick={() => handleCreateTask(config.key)}>
-                        Lưu công việc
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setAddingQuadrant(config.key);
-                      setNewTitle("");
-                      setNewDesc("");
-                    }}
-                    className="w-full py-2 text-xs font-semibold text-text-secondary hover:text-text-primary hover:bg-surface-tertiary border border-dashed border-border rounded-xl transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Thêm công việc vào {config.title.split(" ")[1]}</span>
-                  </button>
-                )}
               </div>
             </Card>
           );
