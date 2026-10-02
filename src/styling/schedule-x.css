@@ -133,9 +133,11 @@
 .sx__forward-backward-navigation {
   display: flex !important;
   align-items: center !important;
-  gap: 2px !important;
+  gap: 3px !important;
 }
 
+.sx__chevron-wrapper,
+.sx__forward-backward-navigation .sx__chevron-wrapper,
 .sx__forward-backward-navigation button,
 .sx__chevron-button {
   background-color: var(--surface-secondary) !important;
@@ -144,17 +146,38 @@
   color: var(--text-secondary) !important;
   width: 26px !important;
   height: 26px !important;
-  display: flex !important;
+  min-width: 26px !important;
+  min-height: 26px !important;
+  max-width: 26px !important;
+  max-height: 26px !important;
+  display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   transition: all 0.15s ease !important;
   padding: 0 !important;
+  cursor: pointer !important;
+  box-sizing: border-box !important;
 }
 
+.sx__chevron-wrapper:hover,
+.sx__chevron-wrapper:focus,
 .sx__forward-backward-navigation button:hover,
 .sx__chevron-button:hover {
   background-color: var(--surface-tertiary) !important;
-  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+.sx__chevron-wrapper .sx__chevron {
+  width: 6px !important;
+  height: 6px !important;
+  border-width: 1.5px 1.5px 0 0 !important;
+  border-style: solid !important;
+  border-color: var(--text-secondary) !important;
+  position: absolute !important;
+}
+
+.sx__chevron-wrapper:hover .sx__chevron {
+  border-color: var(--text-primary) !important;
 }
 
 .sx__today-button {
