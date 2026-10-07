@@ -16,6 +16,9 @@ export const API_ENDPOINTS = {
   TASK_STATUS: (id: string) => `/tasks/${id}/status`,
   TASK_SCHEDULE: (id: string) => `/tasks/${id}/schedule`,
   TASK_BY_ID: (id: string) => `/tasks/${id}`,
+  TASK_OCCURRENCE_STATUS: (id: string, date: string) => `/tasks/${id}/occurrences/${date}/status`,
+  TASK_OCCURRENCE_OVERRIDE: (id: string, date: string) => `/tasks/${id}/occurrences/${date}`,
+  TASK_OCCURRENCE_CANCEL: (id: string, date: string) => `/tasks/${id}/occurrences/${date}`,
 
   // Daily Habits
   HABITS_TODAY: "/habits/today",

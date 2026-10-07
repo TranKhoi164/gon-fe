@@ -13,8 +13,16 @@ import {
 import "@schedule-x/theme-default/dist/index.css";
 import "@/styling/schedule-x.css";
 
-import { Task, EisenhowerQuadrant } from "@/types/dashboard.types";
-import { EisenhowerQuadrantEnum } from "@/constants/dashboard.enums";
+import {
+  CalendarTaskItem,
+  EisenhowerQuadrant,
+  CreateTaskDto,
+  OverrideOccurrenceDto,
+} from "@/types/dashboard.types";
+import {
+  EisenhowerQuadrantEnum,
+  TaskStatusEnum,
+} from "@/constants/dashboard.enums";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,17 +31,29 @@ import {
   Sparkles,
   Clock,
   CheckCircle2,
+  Repeat,
+  Edit2,
+  Trash2,
+  X,
+  RotateCcw,
 } from "lucide-react";
+import { rruleToFriendlyVi } from "@/utils/recurrence";
 
 export interface CalendarGridViewProps {
-  tasks: Task[];
+  tasks: CalendarTaskItem[];
   onOpenCreateModal?: (initialData?: {
     date?: string;
     startTime?: string;
     endTime?: string;
     quadrant?: EisenhowerQuadrant;
   }) => void;
-  onSelectTask?: (task: Task) => void;
+  onSelectTask?: (task: CalendarTaskItem) => void;
+  onRangeChange?: (startDate: string, endDate: string) => void;
+  onToggleOccurrenceStatus?: (id: string, date: string, newStatus: TaskStatusEnum) => Promise<void>;
+  onOverrideOccurrence?: (id: string, date: string, dto: OverrideOccurrenceDto) => Promise<void>;
+  onCancelOccurrence?: (id: string, date: string) => Promise<void>;
+  onUpdateSeries?: (id: string, dto: Partial<CreateTaskDto>) => Promise<void>;
+  onDeleteSeries?: (id: string) => Promise<void>;
 }
 
 const QUADRANTS_THEME = {
@@ -105,15 +125,31 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
   tasks,
   onOpenCreateModal,
   onSelectTask,
+  onRangeChange,
+  onToggleOccurrenceStatus,
+  onOverrideOccurrence,
+  onCancelOccurrence,
+  onUpdateSeries,
+  onDeleteSeries,
 }) => {
   const isMounted = useSyncExternalStore(
     emptySubscribe,
     () => true,
     () => false
   );
-  const [selectedEventTask, setSelectedEventTask] = useState<Task | null>(null);
 
-  // Keep a ref to onOpenCreateModal so callbacks have stable reference
+  const [selectedEventTask, setSelectedEventTask] = useState<CalendarTaskItem | null>(null);
+  const [modalMode, setModalMode] = useState<"view" | "edit" | "delete">("view");
+
+  // Edit form state
+  const [editTitle, setEditTitle] = useState("");
+  const [editStartTime, setEditStartTime] = useState("");
+  const [editEndTime, setEditEndTime] = useState("");
+  const [editQuadrant, setEditQuadrant] = useState<EisenhowerQuadrant>(EisenhowerQuadrantEnum.GOLD_ZONE);
+  const [editScope, setEditScope] = useState<"instance" | "series">("instance");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Keep refs for stable callback references
   const onOpenCreateModalRef = useRef(onOpenCreateModal);
   useEffect(() => {
     onOpenCreateModalRef.current = onOpenCreateModal;
@@ -124,14 +160,22 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
     onSelectTaskRef.current = onSelectTask;
   }, [onSelectTask]);
 
+  const onRangeChangeRef = useRef(onRangeChange);
+  useEffect(() => {
+    onRangeChangeRef.current = onRangeChange;
+  }, [onRangeChange]);
+
   // Convert tasks to Schedule-X events
   const mappedEvents = useMemo<CalendarEventExternal[]>(() => {
     const tz = Temporal.Now.timeZoneId();
     const todayStr = Temporal.Now.plainDateISO().toString();
 
     return tasks.map((task) => {
-      const dateStr = task.scheduledDate || todayStr;
+      const dateStr = task.occurrenceDate || todayStr;
       const quadrantKey = task.quadrant || EisenhowerQuadrantEnum.GOLD_ZONE;
+
+      // Unique event ID: combine id & occurrenceDate for recurring occurrences
+      const eventId = task.isRecurring ? `${task.id}_${dateStr}` : task.id;
 
       let startTemporal: Temporal.ZonedDateTime | Temporal.PlainDate;
       let endTemporal: Temporal.ZonedDateTime | Temporal.PlainDate;
@@ -165,8 +209,8 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
       }
 
       return {
-        id: task.id,
-        title: task.title,
+        id: eventId,
+        title: task.isRecurring ? `🔁 ${task.title}` : task.title,
         description: task.description || undefined,
         calendarId: quadrantKey,
         start: startTemporal,
@@ -196,6 +240,18 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
       gridStep: 60,
     },
     callbacks: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onRangeUpdate(range: any) {
+        try {
+          if (range?.start && range?.end) {
+            const startStr = range.start.toPlainDate().toString();
+            const endStr = range.end.toPlainDate().toString();
+            onRangeChangeRef.current?.(startStr, endStr);
+          }
+        } catch (e) {
+          console.error("onRangeUpdate parse error:", e);
+        }
+      },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onClickDateTime(dateTime: any) {
         try {
@@ -251,9 +307,19 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
         }
       },
       onEventClick(calendarEvent) {
-        const found = tasks.find((t) => t.id === calendarEvent.id);
+        const found = tasks.find((t) => {
+          const expectedEventId = t.isRecurring ? `${t.id}_${t.occurrenceDate}` : t.id;
+          return expectedEventId === calendarEvent.id || t.id === calendarEvent.id;
+        });
+
         if (found) {
           setSelectedEventTask(found);
+          setModalMode("view");
+          setEditTitle(found.title);
+          setEditStartTime(found.startTime ? found.startTime.slice(0, 5) : "09:00");
+          setEditEndTime(found.endTime ? found.endTime.slice(0, 5) : "10:00");
+          setEditQuadrant(found.quadrant);
+          setEditScope(found.isRecurring ? "instance" : "series");
           onSelectTaskRef.current?.(found);
         }
       },
@@ -266,6 +332,102 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
       calendar.events.set(mappedEvents);
     }
   }, [calendar, mappedEvents]);
+
+  // Handle Tick/Untick status
+  const handleToggleStatus = async () => {
+    if (!selectedEventTask) return;
+    const nextStatus =
+      selectedEventTask.status === TaskStatusEnum.COMPLETED
+        ? TaskStatusEnum.TODO
+        : TaskStatusEnum.COMPLETED;
+
+    // Optimistic local update
+    setSelectedEventTask((prev) => (prev ? { ...prev, status: nextStatus } : null));
+
+    try {
+      if (onToggleOccurrenceStatus) {
+        await onToggleOccurrenceStatus(
+          selectedEventTask.id,
+          selectedEventTask.occurrenceDate,
+          nextStatus
+        );
+      }
+    } catch (err) {
+      console.error("Error toggling occurrence status:", err);
+      // Revert if error
+      setSelectedEventTask((prev) =>
+        prev ? { ...prev, status: selectedEventTask.status } : null
+      );
+    }
+  };
+
+  // Handle Save Edit
+  const handleSaveEdit = async () => {
+    if (!selectedEventTask || !editTitle.trim()) return;
+    setIsSubmitting(true);
+    try {
+      if (selectedEventTask.isRecurring && editScope === "instance") {
+        if (onOverrideOccurrence) {
+          await onOverrideOccurrence(
+            selectedEventTask.id,
+            selectedEventTask.occurrenceDate,
+            {
+              title: editTitle.trim(),
+              startTime: editStartTime ? `${editStartTime}:00` : undefined,
+              endTime: editEndTime ? `${editEndTime}:00` : undefined,
+              quadrant: editQuadrant,
+            }
+          );
+        }
+      } else {
+        if (onUpdateSeries) {
+          await onUpdateSeries(selectedEventTask.id, {
+            title: editTitle.trim(),
+            startTime: editStartTime ? `${editStartTime}:00` : undefined,
+            endTime: editEndTime ? `${editEndTime}:00` : undefined,
+            quadrant: editQuadrant,
+          });
+        }
+      }
+      setSelectedEventTask(null);
+    } catch (err) {
+      console.error("Error saving task edit:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle Cancel Occurrence (Delete single instance)
+  const handleCancelInstance = async () => {
+    if (!selectedEventTask) return;
+    setIsSubmitting(true);
+    try {
+      if (onCancelOccurrence) {
+        await onCancelOccurrence(selectedEventTask.id, selectedEventTask.occurrenceDate);
+      }
+      setSelectedEventTask(null);
+    } catch (err) {
+      console.error("Error cancelling occurrence:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle Delete Entire Series
+  const handleDeleteAll = async () => {
+    if (!selectedEventTask) return;
+    setIsSubmitting(true);
+    try {
+      if (onDeleteSeries) {
+        await onDeleteSeries(selectedEventTask.id);
+      }
+      setSelectedEventTask(null);
+    } catch (err) {
+      console.error("Error deleting series:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (!isMounted) {
     return (
@@ -291,7 +453,7 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
               Lịch Biểu Timeboxing
             </h3>
             <p className="text-[11px] text-text-tertiary hidden sm:block">
-              Bấm trực tiếp vào các ô giờ để lên lịch nhiệm vụ tức thì
+              Hỗ trợ công việc định kỳ ảo RFC 5545 và quản lý trạng thái riêng từng ngày
             </p>
           </div>
         </div>
@@ -320,7 +482,7 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
           <button
             type="button"
             onClick={() => onOpenCreateModal?.()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-hover text-on-primary font-medium text-xs rounded-md shadow-warm-xs hover:shadow-warm transition-all active:scale-95 shrink-0"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-hover text-on-primary font-medium text-xs rounded-md shadow-warm-xs hover:shadow-warm transition-all active:scale-95 shrink-0 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2]" />
             <span>Tạo công việc</span>
@@ -333,80 +495,300 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
         {calendar && <ScheduleXCalendar calendarApp={calendar} />}
       </div>
 
-      {/* Event Details Quick Modal */}
+      {/* Interactive Task Details & Action Modal */}
       {selectedEventTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-sm rounded-xl bg-surface border border-border p-5 shadow-warm-lg space-y-4 animate-in zoom-in-95 duration-200">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <Badge
-                  variant={selectedEventTask.isGoldZone ? "gold" : "primary"}
-                  className="text-[10px] font-medium mb-1.5 rounded-md inline-flex items-center gap-1"
-                >
-                  {selectedEventTask.isGoldZone ? (
-                    <>
-                      <Sparkles className="w-3 h-3 text-accent-gold stroke-[1.8]" />
-                      <span>Gold Zone (+30 XP)</span>
-                    </>
-                  ) : (
-                    <span>{selectedEventTask.quadrant}</span>
+          <div className="w-full max-w-md rounded-xl bg-surface border border-border p-5 shadow-warm-lg space-y-4 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-2 border-b border-border/50 pb-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Badge
+                    variant={selectedEventTask.isGoldZone ? "gold" : "primary"}
+                    className="text-[10px] font-medium rounded-md inline-flex items-center gap-1"
+                  >
+                    {selectedEventTask.isGoldZone ? (
+                      <>
+                        <Sparkles className="w-3 h-3 text-accent-gold stroke-[1.8]" />
+                        <span>Gold Zone (+30 XP)</span>
+                      </>
+                    ) : (
+                      <span>{selectedEventTask.quadrant}</span>
+                    )}
+                  </Badge>
+
+                  {selectedEventTask.isRecurring && (
+                    <Badge variant="primary" className="text-[10px] inline-flex items-center gap-1">
+                      <Repeat className="w-3 h-3" />
+                      <span>{rruleToFriendlyVi(selectedEventTask.rrule)}</span>
+                    </Badge>
                   )}
-                </Badge>
+
+                  {selectedEventTask.isOverridden && (
+                    <Badge variant="amber" className="text-[10px] inline-flex items-center gap-1">
+                      ✏️ Đã đổi lịch riêng ngày này
+                    </Badge>
+                  )}
+                </div>
+
                 <h4 className="text-base font-serif-display font-bold text-text-primary leading-snug">
                   {selectedEventTask.title}
                 </h4>
               </div>
+
               <button
                 type="button"
                 onClick={() => setSelectedEventTask(null)}
-                className="text-text-tertiary hover:text-text-primary p-1 rounded-lg hover:bg-surface-secondary transition-colors"
+                className="text-text-tertiary hover:text-text-primary p-1 rounded-lg hover:bg-surface-secondary transition-colors cursor-pointer"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {selectedEventTask.description && (
-              <p className="text-xs text-text-secondary whitespace-pre-wrap bg-surface-secondary p-3 rounded-lg border border-border">
-                {selectedEventTask.description}
-              </p>
+            {/* Modal Body: VIEW MODE */}
+            {modalMode === "view" && (
+              <div className="space-y-4">
+                {selectedEventTask.description && (
+                  <p className="text-xs text-text-secondary whitespace-pre-wrap bg-surface-secondary p-3 rounded-lg border border-border">
+                    {selectedEventTask.description}
+                  </p>
+                )}
+
+                <div className="space-y-2 text-xs text-text-tertiary">
+                  <div className="flex items-center gap-2">
+                    <CalendarIcon className="w-3.5 h-3.5 stroke-[1.8]" />
+                    <span className="text-text-secondary font-medium">
+                      {selectedEventTask.occurrenceDate}
+                    </span>
+                    {selectedEventTask.startTime && selectedEventTask.endTime && (
+                      <span>({selectedEventTask.startTime} – {selectedEventTask.endTime})</span>
+                    )}
+                  </div>
+
+                  {selectedEventTask.estimatedMinutes && (
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-3.5 h-3.5 stroke-[1.8]" />
+                      <span>
+                        Dự kiến: <strong className="text-text-secondary">{selectedEventTask.estimatedMinutes} phút</strong>
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 stroke-[1.8]" />
+                    <span>
+                      Trạng thái:{" "}
+                      <strong className={selectedEventTask.status === TaskStatusEnum.COMPLETED ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-text-secondary"}>
+                        {selectedEventTask.status === TaskStatusEnum.COMPLETED ? "Đã hoàn thành" : "Cần làm (TODO)"}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Primary Actions: Toggle Status & Edit / Delete */}
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
+                  <button
+                    type="button"
+                    onClick={handleToggleStatus}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      selectedEventTask.status === TaskStatusEnum.COMPLETED
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+                        : "bg-primary text-on-primary hover:bg-primary-hover shadow-warm-xs"
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 stroke-[2]" />
+                    <span>
+                      {selectedEventTask.status === TaskStatusEnum.COMPLETED
+                        ? "Hoàn thành (Bấm để hủy)"
+                        : "Đánh dấu hoàn thành"}
+                    </span>
+                  </button>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setModalMode("edit")}
+                      className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-secondary border border-border/70 transition-colors cursor-pointer"
+                      title="Chỉnh sửa công việc"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 stroke-[1.8]" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalMode("delete")}
+                      className="p-2 rounded-lg text-rose-500 hover:bg-rose-500/10 border border-rose-500/20 transition-colors cursor-pointer"
+                      title="Xóa công việc"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 stroke-[1.8]" />
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
 
-            <div className="space-y-2 text-xs text-text-tertiary">
-              {selectedEventTask.scheduledDate && (
-                <div className="flex items-center gap-2">
-                  <CalendarIcon className="w-3.5 h-3.5 stroke-[1.8]" />
-                  <span className="text-text-secondary">{selectedEventTask.scheduledDate}</span>
-                  {selectedEventTask.startTime && selectedEventTask.endTime && (
-                    <span>({selectedEventTask.startTime} – {selectedEventTask.endTime})</span>
-                  )}
+            {/* Modal Body: EDIT MODE */}
+            {modalMode === "edit" && (
+              <div className="space-y-3 animate-in fade-in duration-150">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-text-secondary">Tiêu đề công việc:</label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="w-full text-xs bg-surface-secondary border border-border rounded-lg px-2.5 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
                 </div>
-              )}
-              {selectedEventTask.estimatedMinutes && (
-                <div className="flex items-center gap-2">
-                  <Clock className="w-3.5 h-3.5 stroke-[1.8]" />
-                  <span>Dự kiến: <strong className="text-text-secondary">{selectedEventTask.estimatedMinutes} phút</strong></span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 stroke-[1.8]" />
-                <span>
-                  Trạng thái:{" "}
-                  <strong className={selectedEventTask.status === "COMPLETED" ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-text-secondary"}>
-                    {selectedEventTask.status === "COMPLETED" ? "Đã hoàn thành" : "Cần làm (TODO)"}
-                  </strong>
-                </span>
-              </div>
-            </div>
 
-            <div className="flex justify-end pt-2">
-              <button
-                type="button"
-                onClick={() => setSelectedEventTask(null)}
-                className="px-4 py-2 text-xs font-medium rounded-lg bg-surface-secondary text-text-primary hover:bg-surface-tertiary border border-border transition-colors"
-              >
-                Đóng
-              </button>
-            </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-text-secondary">Giờ bắt đầu:</label>
+                    <input
+                      type="time"
+                      value={editStartTime}
+                      onChange={(e) => setEditStartTime(e.target.value)}
+                      className="w-full text-xs bg-surface-secondary border border-border rounded-lg px-2.5 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-text-secondary">Giờ kết thúc:</label>
+                    <input
+                      type="time"
+                      value={editEndTime}
+                      onChange={(e) => setEditEndTime(e.target.value)}
+                      className="w-full text-xs bg-surface-secondary border border-border rounded-lg px-2.5 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-text-secondary">Mức độ ưu tiên (Eisenhower):</label>
+                  <select
+                    value={editQuadrant}
+                    onChange={(e) => setEditQuadrant(e.target.value as EisenhowerQuadrant)}
+                    className="w-full text-xs bg-surface-secondary border border-border rounded-lg px-2.5 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value={EisenhowerQuadrantEnum.GOLD_ZONE}>Gold Zone (Q2 - Quan trọng • Lên lịch)</option>
+                    <option value={EisenhowerQuadrantEnum.DO_FIRST}>Do First (Q1 - Khẩn cấp & Quan trọng)</option>
+                    <option value={EisenhowerQuadrantEnum.DELEGATE}>Delegate (Q3 - Khẩn cấp • Ủy quyền)</option>
+                    <option value={EisenhowerQuadrantEnum.ELIMINATE}>Eliminate (Q4 - Loại bỏ • Gom việc)</option>
+                  </select>
+                </div>
+
+                {selectedEventTask.isRecurring && (
+                  <div className="space-y-1.5 p-2.5 bg-surface-secondary rounded-lg border border-border text-xs">
+                    <label className="font-semibold text-text-primary block">Phạm vi áp dụng chỉnh sửa:</label>
+                    <div className="space-y-1">
+                      <label className="flex items-center gap-2 cursor-pointer text-text-secondary">
+                        <input
+                          type="radio"
+                          name="editScope"
+                          checked={editScope === "instance"}
+                          onChange={() => setEditScope("instance")}
+                          className="accent-primary"
+                        />
+                        <span>Chỉ ngày này ({selectedEventTask.occurrenceDate})</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-text-secondary">
+                        <input
+                          type="radio"
+                          name="editScope"
+                          checked={editScope === "series"}
+                          onChange={() => setEditScope("series")}
+                          className="accent-primary"
+                        />
+                        <span>Toàn bộ chuỗi lặp lại</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => setModalMode("view")}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-surface-secondary text-text-secondary hover:text-text-primary border border-border cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmitting || !editTitle.trim()}
+                    onClick={handleSaveEdit}
+                    className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-primary text-on-primary hover:bg-primary-hover shadow-warm-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Body: DELETE CONFIRMATION */}
+            {modalMode === "delete" && (
+              <div className="space-y-3 animate-in fade-in duration-150">
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  {selectedEventTask.isRecurring
+                    ? "Đây là một công việc lặp lại định kỳ. Bạn muốn xóa theo cách nào?"
+                    : "Bạn có chắc chắn muốn xóa công việc này không?"}
+                </p>
+
+                {selectedEventTask.isRecurring ? (
+                  <div className="space-y-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleCancelInstance}
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg bg-surface-secondary hover:bg-surface-tertiary border border-border text-text-primary transition-colors cursor-pointer text-left"
+                    >
+                      <div>
+                        <div className="font-semibold">Chỉ xóa ngày này</div>
+                        <div className="text-[10px] text-text-tertiary">
+                          Bỏ qua ngày {selectedEventTask.occurrenceDate}, giữ nguyên các ngày khác
+                        </div>
+                      </div>
+                      <RotateCcw className="w-3.5 h-3.5 text-text-tertiary" />
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleDeleteAll}
+                      className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-600 dark:text-rose-400 transition-colors cursor-pointer text-left"
+                    >
+                      <div>
+                        <div>Xóa toàn bộ chuỗi lặp lại</div>
+                        <div className="text-[10px] text-rose-500/80 font-normal">
+                          Xóa hoàn toàn chuỗi công việc này khỏi toàn bộ lịch
+                        </div>
+                      </div>
+                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={handleDeleteAll}
+                      className="w-full px-3 py-2 text-xs font-semibold rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors cursor-pointer"
+                    >
+                      {isSubmitting ? "Đang xóa..." : "Xác nhận xóa"}
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-2 border-t border-border/50">
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => setModalMode("view")}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-surface-secondary text-text-secondary hover:text-text-primary border border-border cursor-pointer"
+                  >
+                    Quay lại
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

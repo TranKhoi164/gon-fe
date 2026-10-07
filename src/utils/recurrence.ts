@@ -176,3 +176,71 @@ export function generateRecurrenceDates(
   }
 }
 
+const RFC_DAY_NAMES: Record<number, string> = {
+  0: "SU",
+  1: "MO",
+  2: "TU",
+  3: "WE",
+  4: "TH",
+  5: "FR",
+  6: "SA",
+};
+
+/**
+ * Converts RecurrenceConfig to standard RFC 5545 RRULE string
+ */
+export function recurrenceConfigToRRule(config?: RecurrenceConfig | null): string | undefined {
+  if (!config) return undefined;
+
+  const { interval = 1, unit = "day", daysOfWeek = [], endType, endDate, occurrences } = config;
+  const safeInterval = Math.max(1, interval);
+
+  let freq = "DAILY";
+  if (unit === "week") freq = "WEEKLY";
+  else if (unit === "month") freq = "MONTHLY";
+  else if (unit === "year") freq = "YEARLY";
+
+  let rrule = `RRULE:FREQ=${freq};INTERVAL=${safeInterval}`;
+
+  if (unit === "week" && daysOfWeek.length > 0) {
+    const byDays = daysOfWeek
+      .slice()
+      .sort((a, b) => a - b)
+      .map((d) => RFC_DAY_NAMES[d])
+      .filter(Boolean);
+    if (byDays.length > 0) {
+      rrule += `;BYDAY=${byDays.join(",")}`;
+    }
+  }
+
+  if (endType === "after_occurrences" && occurrences && occurrences > 0) {
+    rrule += `;COUNT=${occurrences}`;
+  } else if (endType === "on_date" && endDate) {
+    const cleanDate = endDate.replace(/[-:]/g, "");
+    rrule += `;UNTIL=${cleanDate}T235959Z`;
+  }
+
+  return rrule;
+}
+
+/**
+ * Returns friendly Vietnamese summary for a given RRULE string
+ */
+export function rruleToFriendlyVi(rrule?: string | null): string {
+  if (!rrule) return "Không lặp lại";
+  if (rrule.includes("FREQ=DAILY")) {
+    if (rrule.includes("INTERVAL=2")) return "Cách 2 ngày một lần";
+    return "Lặp lại hàng ngày";
+  }
+  if (rrule.includes("FREQ=WEEKLY")) {
+    if (rrule.includes("BYDAY=SA,SU")) return "Lặp lại cuối tuần";
+    if (rrule.includes("BYDAY=MO,WE,FR")) return "Thứ 2, 4, 6";
+    if (rrule.includes("BYDAY=TU,TH,SA")) return "Thứ 3, 5, 7";
+    return "Lặp lại hàng tuần";
+  }
+  if (rrule.includes("FREQ=MONTHLY")) return "Lặp lại hàng tháng";
+  if (rrule.includes("FREQ=YEARLY")) return "Lặp lại hàng năm";
+  return "Lặp lại định kỳ";
+}
+
+

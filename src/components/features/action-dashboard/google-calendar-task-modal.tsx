@@ -14,6 +14,7 @@ import { RecurrenceConfig } from "@/types/recurrence.types";
 import {
   formatRecurrenceSummary,
   generateRecurrenceDates,
+  recurrenceConfigToRRule,
 } from "@/utils/recurrence";
 import { CustomRecurrenceModal } from "./custom-recurrence-modal";
 import {
@@ -42,6 +43,7 @@ export interface GoogleCalendarTaskModalProps {
     startTime: string;
     endTime: string;
     estimatedMinutes: number;
+    rrule?: string;
     recurrence?: RecurrenceConfig | null;
     recurrenceSummary?: string;
     recurringDates?: string[];
@@ -193,6 +195,7 @@ const GoogleCalendarTaskModalContent: React.FC<GoogleCalendarTaskModalProps> = (
 
     setIsSubmitting(true);
     try {
+      const rrule = recurrence ? recurrenceConfigToRRule(recurrence) : undefined;
       const recurringDates = recurrence
         ? generateRecurrenceDates(scheduledDate, recurrence, recurrence.occurrences || 30)
         : [scheduledDate];
@@ -206,6 +209,7 @@ const GoogleCalendarTaskModalContent: React.FC<GoogleCalendarTaskModalProps> = (
         startTime: isAllDay ? "00:00" : startTime,
         endTime: isAllDay ? "23:59" : endTime,
         estimatedMinutes,
+        rrule,
         recurrence,
         recurrenceSummary: recurrence ? recurrenceSummary : undefined,
         recurringDates,

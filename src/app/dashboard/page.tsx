@@ -6,7 +6,6 @@ import { GamifiedHeaderBar } from "@/components/features/action-dashboard/gamifi
 import { GoalFunnelBanner } from "@/components/features/action-dashboard/goal-funnel-banner";
 import { EisenhowerMatrix } from "@/components/features/action-dashboard/eisenhower-matrix";
 import { CalendarGridView } from "@/components/features/action-dashboard/calendar-grid-view";
-import { DailyHabitsChecklist } from "@/components/features/action-dashboard/daily-habits-checklist";
 import { BatchingBucket } from "@/components/features/action-dashboard/batching-bucket";
 import { FastCaptureModal } from "@/components/features/action-dashboard/fast-capture-modal";
 import { RewardsModal } from "@/components/features/action-dashboard/rewards-modal";
@@ -22,16 +21,17 @@ import {
   EisenhowerMatrixData,
   EisenhowerQuadrant,
   Task,
-  DailyHabit,
+  CalendarTaskItem,
   TaskType,
   PendingReward,
   ClaimRewardResult,
+  CreateTaskDto,
+  OverrideOccurrenceDto,
 } from "@/types/dashboard.types";
 import {
   INITIAL_USER_STATS_MOCK,
   INITIAL_GOAL_FUNNEL_MOCK,
   INITIAL_EISENHOWER_TASKS_MOCK,
-  INITIAL_DAILY_HABITS_MOCK,
   INITIAL_BATCHING_TASKS_MOCK,
   INITIAL_PENDING_REWARDS_MOCK,
 } from "@/constants/dashboard.constants";
@@ -48,7 +48,19 @@ export default function ActionDashboardPage() {
   const [stats, setStats] = useState<UserDashboardStats>(INITIAL_USER_STATS_MOCK);
   const [funnel, setFunnel] = useState<GoalFunnel>(INITIAL_GOAL_FUNNEL_MOCK);
   const [eisenhowerData, setEisenhowerData] = useState<EisenhowerMatrixData>(INITIAL_EISENHOWER_TASKS_MOCK);
-  const [dailyHabits, setDailyHabits] = useState<DailyHabit[]>(INITIAL_DAILY_HABITS_MOCK);
+  const [includeUnscheduled, setIncludeUnscheduled] = useState(false);
+  const [calendarTasks, setCalendarTasks] = useState<CalendarTaskItem[]>([]);
+  const [calendarRange, setCalendarRange] = useState<{ start: string; end: string }>(() => {
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    start.setDate(start.getDate() - 7);
+    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    end.setDate(end.getDate() + 7);
+    return {
+      start: start.toISOString().split("T")[0],
+      end: end.toISOString().split("T")[0],
+    };
+  });
   const [batchingTasks, setBatchingTasks] = useState<Task[]>(INITIAL_BATCHING_TASKS_MOCK);
   const [pendingRewards, setPendingRewards] = useState<PendingReward[]>(INITIAL_PENDING_REWARDS_MOCK);
 
@@ -87,6 +99,18 @@ export default function ActionDashboardPage() {
     setStats(updatedStats);
   }, []);
 
+  // Fetch calendar tasks for range
+  const fetchCalendarTasks = useCallback(async (startStr: string, endStr: string) => {
+    const data = await dashboardService.getCalendarTasks(startStr, endStr);
+    setCalendarTasks(data);
+  }, []);
+
+  // Range change callback from calendar
+  const handleRangeChange = useCallback((startStr: string, endStr: string) => {
+    setCalendarRange({ start: startStr, end: endStr });
+    fetchCalendarTasks(startStr, endStr);
+  }, [fetchCalendarTasks]);
+
   // Initial Data Fetching
   useEffect(() => {
     let isMounted = true;
@@ -96,25 +120,25 @@ export default function ActionDashboardPage() {
         fetchedStats,
         fetchedFunnel,
         fetchedMatrix,
-        fetchedHabits,
         fetchedBatching,
         fetchedRewards,
+        fetchedCalendarTasks,
       ] = await Promise.all([
         dashboardService.getDashboardStats(),
         dashboardService.getGoalFunnel(),
-        dashboardService.getEisenhowerTasks(todayStr),
-        dashboardService.getDailyHabits(todayStr),
+        dashboardService.getEisenhowerTasks(todayStr, includeUnscheduled),
         dashboardService.getBatchingTasks(),
         dashboardService.getPendingRewards(),
+        dashboardService.getCalendarTasks(calendarRange.start, calendarRange.end),
       ]);
 
       if (isMounted) {
         setStats(fetchedStats);
         setFunnel(fetchedFunnel);
         setEisenhowerData(fetchedMatrix);
-        setDailyHabits(fetchedHabits);
         setBatchingTasks(fetchedBatching);
         setPendingRewards(fetchedRewards);
+        setCalendarTasks(fetchedCalendarTasks);
       }
     };
 
@@ -122,7 +146,7 @@ export default function ActionDashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [calendarRange.start, calendarRange.end, includeUnscheduled]);
 
   // Global Ctrl+K Listener
   useEffect(() => {
@@ -194,20 +218,58 @@ export default function ActionDashboardPage() {
   };
 
   // 4. Eisenhower Task Handlers
-  const handleToggleTaskStatus = async (taskId: string, currentStatus: string) => {
+  const handleToggleTaskStatus = async (task: Task) => {
+    const todayStr = new Date().toISOString().split("T")[0];
     const nextStatus =
-      currentStatus === TaskStatusEnum.COMPLETED
+      task.status === TaskStatusEnum.COMPLETED
         ? TaskStatusEnum.TODO
         : TaskStatusEnum.COMPLETED;
 
-    const result = await dashboardService.completeTask(taskId);
+    let xpGained = 0;
+    let currentXp = stats.xp;
+    let currentLevel = stats.level;
+
+    if (task.isRecurring) {
+      const occurrenceDate = task.occurrenceDate || todayStr;
+      const result = await dashboardService.updateOccurrenceStatus(
+        task.id,
+        occurrenceDate,
+        nextStatus
+      );
+      xpGained = result.xpGained;
+      currentXp = result.currentXp;
+      currentLevel = result.currentLevel;
+
+      // Update local calendarTasks state if present
+      setCalendarTasks((prev) =>
+        prev.map((item) =>
+          item.id === task.id && item.occurrenceDate === occurrenceDate
+            ? { ...item, status: nextStatus, completedAt: result.task.completedAt }
+            : item
+        )
+      );
+    } else {
+      const result = await dashboardService.completeTask(task.id);
+      xpGained = result.xpGained;
+      currentXp = result.currentXp || currentXp + xpGained;
+      currentLevel = result.currentLevel || currentLevel;
+
+      // Update local calendarTasks state if present
+      setCalendarTasks((prev) =>
+        prev.map((item) =>
+          item.id === task.id
+            ? { ...item, status: nextStatus, completedAt: result.task.completedAt }
+            : item
+        )
+      );
+    }
 
     // Update state matrix
     setEisenhowerData((prev) => {
       const updated = { ...prev };
       (Object.keys(updated) as EisenhowerQuadrant[]).forEach((quadrant) => {
         updated[quadrant] = updated[quadrant].map((t) =>
-          t.id === taskId
+          t.id === task.id
             ? {
                 ...t,
                 status: nextStatus,
@@ -222,15 +284,31 @@ export default function ActionDashboardPage() {
       return updated;
     });
 
-    if (result.xpGained > 0) {
+    if (xpGained > 0) {
       setStats((prev) => ({
         ...prev,
-        xp: result.currentXp || prev.xp + result.xpGained,
-        level: result.currentLevel || prev.level,
+        xp: currentXp,
+        level: currentLevel,
       }));
-      triggerXpToast(`+${result.xpGained} XP - Hoàn thành công việc! Tích lũy kỷ luật.`);
+      triggerXpToast(`+${xpGained} XP - Hoàn thành công việc! Tích lũy kỷ luật.`);
+      await refreshStats();
+    } else if (xpGained < 0) {
+      setStats((prev) => ({
+        ...prev,
+        xp: currentXp,
+        level: currentLevel,
+      }));
+      triggerXpToast(`Đã hủy hoàn thành (${xpGained} XP)`);
       await refreshStats();
     }
+  };
+
+  const handleToggleIncludeUnscheduled = async () => {
+    const nextVal = !includeUnscheduled;
+    setIncludeUnscheduled(nextVal);
+    const todayStr = new Date().toISOString().split("T")[0];
+    const matrix = await dashboardService.getEisenhowerTasks(todayStr, nextVal);
+    setEisenhowerData(matrix);
   };
 
   const handleAddTask = async (
@@ -268,8 +346,8 @@ export default function ActionDashboardPage() {
     startTime,
     endTime,
     estimatedMinutes,
+    rrule,
     recurrenceSummary,
-    recurringDates,
   }: {
     title: string;
     description?: string;
@@ -279,6 +357,7 @@ export default function ActionDashboardPage() {
     startTime: string;
     endTime: string;
     estimatedMinutes: number;
+    rrule?: string;
     recurrence?: RecurrenceConfig | null;
     recurrenceSummary?: string;
     recurringDates?: string[];
@@ -289,41 +368,125 @@ export default function ActionDashboardPage() {
         : `🔁 ${recurrenceSummary}`
       : description;
 
-    const dates = recurringDates && recurringDates.length > 0 ? recurringDates : [scheduledDate];
-
-    // Concurrently create all recurring task instances
-    const createdTasks = await Promise.all(
-      dates.map((d) =>
-        dashboardService.createTask({
-          title,
-          description: fullDesc,
-          type,
-          quadrant,
-          scheduledDate: d,
-          startTime,
-          endTime,
-          estimatedMinutes,
-        })
-      )
-    );
+    // Create 1 single task on backend with optional rrule (Zero-Waste Database)
+    const createdTask = await dashboardService.createTask({
+      title,
+      description: fullDesc,
+      type,
+      quadrant,
+      scheduledDate,
+      startTime: startTime ? `${startTime}:00` : undefined,
+      endTime: endTime ? `${endTime}:00` : undefined,
+      estimatedMinutes,
+      rrule,
+    });
 
     if (type === TaskTypeEnum.BATCHING) {
-      setBatchingTasks((prev) => [...prev, ...createdTasks]);
+      setBatchingTasks((prev) => [...prev, createdTask]);
     } else {
-      setEisenhowerData((prev) => ({
-        ...prev,
-        [quadrant]: [...prev[quadrant], ...createdTasks],
-      }));
+      const todayStr = new Date().toISOString().split("T")[0];
+      const matrix = await dashboardService.getEisenhowerTasks(todayStr);
+      setEisenhowerData(matrix);
     }
 
+    // Refresh calendar tasks
+    await fetchCalendarTasks(calendarRange.start, calendarRange.end);
+
     triggerXpToast(
-      dates.length > 1
-        ? `Đã tạo ${dates.length} công việc lặp lại thành công!`
-        : TOAST_MESSAGES.TASK_CREATED
+      rrule ? "Đã tạo chuỗi công việc lặp lại thành công!" : TOAST_MESSAGES.TASK_CREATED
     );
   };
 
-  const handleMoveToBatching = (task: Task) => {
+  // Toggle Occurrence Status (Tick/Untick)
+  const handleToggleOccurrenceStatus = async (
+    id: string,
+    date: string,
+    newStatus: TaskStatusEnum
+  ) => {
+    const result = await dashboardService.updateOccurrenceStatus(id, date, newStatus);
+
+    // Update local calendarTasks state
+    setCalendarTasks((prev) =>
+      prev.map((item) =>
+        item.id === id && item.occurrenceDate === date
+          ? { ...item, status: newStatus, completedAt: result.task.completedAt }
+          : item
+      )
+    );
+
+    // Refresh today's Eisenhower matrix if occurrence is today
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (date === todayStr) {
+      const matrix = await dashboardService.getEisenhowerTasks(todayStr);
+      setEisenhowerData(matrix);
+    }
+
+    // Gamification Toast & Stats update
+    if (result.xpGained > 0) {
+      triggerXpToast(`+${result.xpGained} XP - Hoàn thành công việc!`);
+    } else if (result.xpGained < 0) {
+      triggerXpToast(`Đã hủy hoàn thành (${result.xpGained} XP)`);
+    }
+
+    setStats((prev) => ({
+      ...prev,
+      xp: result.currentXp,
+      level: result.currentLevel,
+    }));
+    await refreshStats();
+  };
+
+  // Override Occurrence (Edit single day)
+  const handleOverrideOccurrence = async (
+    id: string,
+    date: string,
+    dto: OverrideOccurrenceDto
+  ) => {
+    await dashboardService.overrideOccurrence(id, date, dto);
+    await fetchCalendarTasks(calendarRange.start, calendarRange.end);
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (date === todayStr) {
+      const matrix = await dashboardService.getEisenhowerTasks(todayStr);
+      setEisenhowerData(matrix);
+    }
+    triggerXpToast("Đã cập nhật riêng cho ngày này thành công!");
+  };
+
+  // Cancel Occurrence (Skip/Delete single day)
+  const handleCancelOccurrence = async (id: string, date: string) => {
+    await dashboardService.cancelOccurrence(id, date);
+    setCalendarTasks((prev) =>
+      prev.filter((item) => !(item.id === id && item.occurrenceDate === date))
+    );
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (date === todayStr) {
+      const matrix = await dashboardService.getEisenhowerTasks(todayStr);
+      setEisenhowerData(matrix);
+    }
+    triggerXpToast("Đã bỏ qua công việc cho ngày này!");
+  };
+
+  // Update Entire Series
+  const handleUpdateTaskSeries = async (id: string, dto: Partial<CreateTaskDto>) => {
+    await dashboardService.updateTaskSeries(id, dto);
+    await fetchCalendarTasks(calendarRange.start, calendarRange.end);
+    const todayStr = new Date().toISOString().split("T")[0];
+    const matrix = await dashboardService.getEisenhowerTasks(todayStr);
+    setEisenhowerData(matrix);
+    triggerXpToast("Đã cập nhật toàn bộ chuỗi công việc thành công!");
+  };
+
+  // Delete Entire Series
+  const handleDeleteTaskSeries = async (id: string) => {
+    await dashboardService.deleteTaskSeries(id);
+    setCalendarTasks((prev) => prev.filter((item) => item.id !== id));
+    const todayStr = new Date().toISOString().split("T")[0];
+    const matrix = await dashboardService.getEisenhowerTasks(todayStr);
+    setEisenhowerData(matrix);
+    triggerXpToast("Đã xóa chuỗi công việc thành công!");
+  };
+
+  const handleMoveToBatching = async (task: Task) => {
     // Remove from Eliminate quadrant
     setEisenhowerData((prev) => ({
       ...prev,
@@ -333,37 +496,14 @@ export default function ActionDashboardPage() {
     }));
     // Add to Batching tasks
     setBatchingTasks((prev) => [...prev, { ...task, type: TaskTypeEnum.BATCHING }]);
+
+    // Persist to backend
+    await dashboardService.updateTaskSeries(task.id, { type: TaskTypeEnum.BATCHING });
+
     triggerXpToast("Đã chuyển việc vặt vào Thùng Gom Batching 15p!");
   };
 
-  // 5. Daily Habits Handlers
-  const handleToggleHabit = async (id: string) => {
-    const todayStr = new Date().toISOString().split("T")[0];
-    const result = await dashboardService.toggleHabit(id, todayStr);
-
-    setDailyHabits((prev) =>
-      prev.map((h) =>
-        h.id === id ? { ...h, isCompletedToday: !h.isCompletedToday } : h
-      )
-    );
-
-    if (result.isCompletedToday && (result.xpGained ?? 0) > 0) {
-      setStats((prev) => ({
-        ...prev,
-        xp: result.newTotalXp || prev.xp + (result.xpGained || 15),
-      }));
-      triggerXpToast(`+${result.xpGained || 15} XP - Hoàn thành thói quen kỷ luật!`);
-      await refreshStats();
-    }
-  };
-
-  const handleAddHabit = async (title: string) => {
-    const newHabit = await dashboardService.createHabit(title);
-    setDailyHabits((prev) => [...prev, newHabit]);
-    triggerXpToast("Đã thêm thói quen mới thành công!");
-  };
-
-  // 6. Batching Session Handler
+  // 5. Batching Session Handler
   const handleCompleteBatchingSession = async (taskIds: string[]) => {
     const result = await dashboardService.completeBatchingSession(taskIds);
     setBatchingTasks((prev) => prev.filter((t) => !taskIds.includes(t.id)));
@@ -379,14 +519,6 @@ export default function ActionDashboardPage() {
     );
     await refreshStats();
   };
-
-  // Extract all tasks for calendar grid
-  const allCalendarTasks: Task[] = [
-    ...eisenhowerData.GOLD_ZONE,
-    ...eisenhowerData.DO_FIRST,
-    ...eisenhowerData.DELEGATE,
-    ...eisenhowerData.ELIMINATE,
-  ];
 
   return (
     <div className="min-h-screen bg-background text-text-primary flex font-sans">
@@ -456,21 +588,24 @@ export default function ActionDashboardPage() {
               onToggleTaskStatus={handleToggleTaskStatus}
               onMoveToBatching={handleMoveToBatching}
               onOpenCreateModal={(q) => handleOpenGoogleTaskModal({ quadrant: q })}
+              includeUnscheduled={includeUnscheduled}
+              onToggleIncludeUnscheduled={handleToggleIncludeUnscheduled}
             />
           ) : (
             <CalendarGridView
-              tasks={allCalendarTasks}
+              tasks={calendarTasks}
               onOpenCreateModal={handleOpenGoogleTaskModal}
+              onRangeChange={handleRangeChange}
+              onToggleOccurrenceStatus={handleToggleOccurrenceStatus}
+              onOverrideOccurrence={handleOverrideOccurrence}
+              onCancelOccurrence={handleCancelOccurrence}
+              onUpdateSeries={handleUpdateTaskSeries}
+              onDeleteSeries={handleDeleteTaskSeries}
             />
           )}
 
-          {/* Bottom Grid: Daily Habits & Batching Bucket */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <DailyHabitsChecklist
-              habits={dailyHabits}
-              onToggleHabit={handleToggleHabit}
-              onAddHabit={handleAddHabit}
-            />
+          {/* Bottom Section: Batching Bucket */}
+          <div>
             <BatchingBucket
               tasks={batchingTasks}
               onAddBatchTask={(title) =>

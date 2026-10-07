@@ -20,10 +20,12 @@ import {
 
 export interface EisenhowerMatrixProps {
   data: EisenhowerMatrixData;
-  onToggleTaskStatus: (taskId: string, currentStatus: string) => Promise<void>;
+  onToggleTaskStatus: (task: Task) => Promise<void>;
   onAddTask?: (title: string, quadrant: EisenhowerQuadrant, description?: string) => Promise<void>;
   onMoveToBatching?: (task: Task) => void;
   onOpenCreateModal?: (quadrant?: EisenhowerQuadrant) => void;
+  includeUnscheduled?: boolean;
+  onToggleIncludeUnscheduled?: () => void;
 }
 
 export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
@@ -31,13 +33,15 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
   onToggleTaskStatus,
   onMoveToBatching,
   onOpenCreateModal,
+  includeUnscheduled,
+  onToggleIncludeUnscheduled,
 }) => {
   const [loadingTaskId, setLoadingTaskId] = useState<string | null>(null);
 
-  const handleToggle = async (taskId: string, currentStatus: string) => {
-    setLoadingTaskId(taskId);
+  const handleToggle = async (task: Task) => {
+    setLoadingTaskId(task.id);
     try {
-      await onToggleTaskStatus(taskId, currentStatus);
+      await onToggleTaskStatus(task);
     } finally {
       setLoadingTaskId(null);
     }
@@ -57,15 +61,31 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
           </p>
         </div>
 
-        {/* Dedicated Separate Create Task Button */}
-        <button
-          type="button"
-          onClick={() => onOpenCreateModal?.()}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-hover text-on-primary font-medium text-xs rounded-md shadow-warm-xs hover:shadow-warm transition-all active:scale-95 shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[2]" />
-          <span>Tạo công việc mới</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {onToggleIncludeUnscheduled ? (
+            <button
+              type="button"
+              onClick={onToggleIncludeUnscheduled}
+              className={`flex items-center gap-1.5 px-3 py-1.5 font-medium text-xs rounded-md border transition-all active:scale-95 ${
+                includeUnscheduled
+                  ? "bg-primary/10 border-primary text-primary shadow-warm-xs"
+                  : "bg-surface-secondary border-border text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              <span>{includeUnscheduled ? "Đang hiện việc chưa xếp ngày" : "Hiện việc chưa xếp ngày"}</span>
+            </button>
+          ) : null}
+
+          {/* Dedicated Separate Create Task Button */}
+          <button
+            type="button"
+            onClick={() => onOpenCreateModal?.()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-hover text-on-primary font-medium text-xs rounded-md shadow-warm-xs hover:shadow-warm transition-all active:scale-95 shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2]" />
+            <span>Tạo công việc mới</span>
+          </button>
+        </div>
       </div>
 
       {/* 4 Quadrants Grid */}
@@ -125,13 +145,20 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
                         type="checkbox"
                         checked={isDone}
                         disabled={isLoading}
-                        onChange={() => handleToggle(task.id, task.status)}
+                        onChange={() => handleToggle(task)}
                         className="mt-0.5 w-4 h-4 rounded border-border accent-primary text-primary focus:ring-primary cursor-pointer disabled:opacity-50"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold leading-snug break-words">
-                          {task.title}
-                        </p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-sm font-semibold leading-snug break-words">
+                            {task.title}
+                          </p>
+                          {task.isRecurring ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] bg-primary/10 text-primary font-medium shrink-0" title="Nhiệm vụ lặp lại định kỳ">
+                              🔁 Lặp lại
+                            </span>
+                          ) : null}
+                        </div>
                         {task.description ? (
                           <p className="text-xs text-text-secondary mt-0.5 line-clamp-2">
                             {task.description}

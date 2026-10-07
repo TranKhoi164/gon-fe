@@ -8,6 +8,8 @@ import {
   CreateGoalDto,
   EisenhowerMatrixData,
   Task,
+  TaskStatus,
+  CalendarTaskItem,
   CreateTaskDto,
   ScheduleTaskDto,
   TaskCompleteResult,
@@ -16,6 +18,8 @@ import {
   BatchingCompleteResult,
   PendingReward,
   ClaimRewardResult,
+  UpdateOccurrenceStatusResult,
+  OverrideOccurrenceDto,
 } from "@/types/dashboard.types";
 import {
   TaskStatusEnum,
@@ -121,14 +125,17 @@ export const dashboardService = {
   },
 
   /**
-   * 6. Lấy 4 ô Ma trận Eisenhower theo ngày
-   * GET /tasks/eisenhower?date=YYYY-MM-DD
+   * 6. Lấy 4 ô Ma trận Eisenhower theo ngày (hỗ trợ Recurring Tasks & Unscheduled Tasks)
+   * GET /tasks/eisenhower?date=YYYY-MM-DD&includeUnscheduled=true
    */
-  async getEisenhowerTasks(dateStr?: string): Promise<EisenhowerMatrixData> {
+  async getEisenhowerTasks(dateStr?: string, includeUnscheduled = false): Promise<EisenhowerMatrixData> {
     try {
-      const endpoint = dateStr
-        ? `${API_ENDPOINTS.TASKS_EISENHOWER}?date=${dateStr}`
-        : API_ENDPOINTS.TASKS_EISENHOWER;
+      const params = new URLSearchParams();
+      if (dateStr) params.set("date", dateStr);
+      if (includeUnscheduled) params.set("includeUnscheduled", "true");
+      const qs = params.toString();
+      const endpoint = qs ? `${API_ENDPOINTS.TASKS_EISENHOWER}?${qs}` : API_ENDPOINTS.TASKS_EISENHOWER;
+
       const data = await apiClient.get<EisenhowerMatrixData, EisenhowerMatrixData>(endpoint);
       return {
         [EisenhowerQuadrantEnum.DO_FIRST]: data[EisenhowerQuadrantEnum.DO_FIRST] || [],
@@ -142,28 +149,28 @@ export const dashboardService = {
   },
 
   /**
-   * 7. Lấy danh sách công việc trên Calendar Grid
-   * GET /tasks/calendar
+   * 7. Lấy danh sách công việc trên Calendar Grid (Unified Calendar View)
+   * GET /tasks/calendar?startDate=...&endDate=...
    */
-  async getCalendarTasks(startDate: string, endDate: string): Promise<Task[]> {
+  async getCalendarTasks(startDate: string, endDate: string, search?: string): Promise<CalendarTaskItem[]> {
     try {
-      const endpoint = `${API_ENDPOINTS.TASKS_CALENDAR}?startDate=${startDate}&endDate=${endDate}&page=1&limit=50`;
-      const res = await apiClient.get<unknown, { data?: Task[] } | Task[]>(endpoint);
+      let endpoint = `${API_ENDPOINTS.TASKS_CALENDAR}?startDate=${startDate}&endDate=${endDate}&perPage=500`;
+      if (search) {
+        endpoint += `&search=${encodeURIComponent(search)}`;
+      }
+      const res = await apiClient.get<unknown, { data?: CalendarTaskItem[] } | CalendarTaskItem[]>(endpoint);
       if (Array.isArray(res)) return res;
-      if (res && Array.isArray(res.data)) return res.data;
+      if (res && Array.isArray((res as { data?: CalendarTaskItem[] }).data)) {
+        return (res as { data: CalendarTaskItem[] }).data;
+      }
       return [];
     } catch {
-      return [
-        ...INITIAL_EISENHOWER_TASKS_MOCK.GOLD_ZONE,
-        ...INITIAL_EISENHOWER_TASKS_MOCK.DO_FIRST,
-        ...INITIAL_EISENHOWER_TASKS_MOCK.DELEGATE,
-        ...INITIAL_EISENHOWER_TASKS_MOCK.ELIMINATE,
-      ];
+      return [];
     }
   },
 
   /**
-   * 8. Tạo công việc mới (Eisenhower hoặc Batching)
+   * 8. Tạo công việc mới (Hỗ trợ One-time & Recurring)
    * POST /tasks
    */
   async createTask(dto: CreateTaskDto): Promise<Task> {
@@ -171,10 +178,14 @@ export const dashboardService = {
       const data = await apiClient.post<Task, Task>(API_ENDPOINTS.TASKS, {
         title: dto.title,
         description: dto.description,
+        type: dto.type || TaskTypeEnum.EISENHOWER,
         quadrant: dto.quadrant || EisenhowerQuadrantEnum.GOLD_ZONE,
         scheduledDate: dto.scheduledDate,
         startTime: dto.startTime,
         endTime: dto.endTime,
+        estimatedMinutes: dto.estimatedMinutes,
+        goalId: dto.goalId,
+        rrule: dto.rrule,
       });
       return data;
     } catch {
@@ -190,13 +201,15 @@ export const dashboardService = {
         endTime: dto.endTime,
         isGoldZone: dto.quadrant === EisenhowerQuadrantEnum.GOLD_ZONE,
         estimatedMinutes: dto.estimatedMinutes || 30,
+        rrule: dto.rrule,
+        isRecurring: !!dto.rrule,
         createdAt: new Date().toISOString(),
       };
     }
   },
 
   /**
-   * 9. Hoàn thành một công việc và nhận thưởng XP
+   * 9. Hoàn thành một công việc đơn lẻ và nhận thưởng XP
    * PATCH /tasks/:id/status
    */
   async completeTask(id: string): Promise<TaskCompleteResult> {
@@ -246,6 +259,118 @@ export const dashboardService = {
         isGoldZone: false,
         createdAt: new Date().toISOString(),
       };
+    }
+  },
+
+  /**
+   * 10.1 Tick / Untick Hoàn Thành 1 Ngày cụ thể của Task
+   * PATCH /tasks/:id/occurrences/:date/status
+   */
+  async updateOccurrenceStatus(
+    id: string,
+    date: string,
+    status: TaskStatus
+  ): Promise<UpdateOccurrenceStatusResult> {
+    try {
+      const data = await apiClient.patch<UpdateOccurrenceStatusResult, UpdateOccurrenceStatusResult>(
+        API_ENDPOINTS.TASK_OCCURRENCE_STATUS(id, date),
+        { status }
+      );
+      return data;
+    } catch {
+      const isComplete = status === TaskStatusEnum.COMPLETED;
+      const xpGained = isComplete ? 30 : -30;
+      return {
+        task: {
+          id,
+          occurrenceDate: date,
+          status,
+          completedAt: isComplete ? new Date().toISOString() : null,
+        },
+        xpGained,
+        currentXp: 450 + xpGained,
+        currentLevel: 3,
+      };
+    }
+  },
+
+  /**
+   * 10.2 Override Sửa Riêng 1 Ngày (Dời giờ, đổi tên, đổi ô ma trận)
+   * PATCH /tasks/:id/occurrences/:date
+   */
+  async overrideOccurrence(
+    id: string,
+    date: string,
+    dto: OverrideOccurrenceDto
+  ): Promise<CalendarTaskItem> {
+    try {
+      const data = await apiClient.patch<CalendarTaskItem, CalendarTaskItem>(
+        API_ENDPOINTS.TASK_OCCURRENCE_OVERRIDE(id, date),
+        dto
+      );
+      return data;
+    } catch {
+      return {
+        id,
+        occurrenceDate: date,
+        isRecurring: true,
+        isOverridden: true,
+        title: dto.title || "Công việc cập nhật riêng",
+        quadrant: dto.quadrant || EisenhowerQuadrantEnum.GOLD_ZONE,
+        isGoldZone: (dto.quadrant || EisenhowerQuadrantEnum.GOLD_ZONE) === EisenhowerQuadrantEnum.GOLD_ZONE,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+        status: TaskStatusEnum.TODO,
+        estimatedMinutes: 60,
+      };
+    }
+  },
+
+  /**
+   * 10.3 Xóa / Bỏ Qua Chỉ 1 Ngày của chuỗi lặp lại
+   * DELETE /tasks/:id/occurrences/:date
+   */
+  async cancelOccurrence(id: string, date: string): Promise<boolean> {
+    try {
+      await apiClient.delete(API_ENDPOINTS.TASK_OCCURRENCE_CANCEL(id, date));
+      return true;
+    } catch {
+      return true;
+    }
+  },
+
+  /**
+   * 10.4 Sửa Toàn Bộ Chuỗi Lặp Lại
+   * PATCH /tasks/:id
+   */
+  async updateTaskSeries(id: string, dto: Partial<CreateTaskDto>): Promise<Task> {
+    try {
+      const data = await apiClient.patch<Task, Task>(
+        API_ENDPOINTS.TASK_BY_ID(id),
+        dto
+      );
+      return data;
+    } catch {
+      return {
+        id,
+        title: dto.title || "Updated series",
+        status: TaskStatusEnum.TODO,
+        isGoldZone: dto.quadrant === EisenhowerQuadrantEnum.GOLD_ZONE,
+        createdAt: new Date().toISOString(),
+      };
+    }
+  },
+
+  /**
+   * 10.5 Xóa Toàn Bộ Chuỗi Lặp Lại / Xóa Task Gốc
+   * DELETE /tasks/:id
+   */
+  async deleteTaskSeries(id: string): Promise<boolean> {
+    try {
+      await apiClient.delete(API_ENDPOINTS.TASK_BY_ID(id));
+      return true;
+    } catch {
+      return true;
     }
   },
 

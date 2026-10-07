@@ -43,6 +43,28 @@ export interface Task {
   estimatedMinutes?: number;
   completedAt?: string | null;
   createdAt: string;
+  isRecurring?: boolean;
+  isOverridden?: boolean;
+  rrule?: string | null;
+  occurrenceDate?: string | null;
+}
+
+export interface CalendarTaskItem {
+  id: string;
+  occurrenceDate: string; // YYYY-MM-DD
+  isRecurring: boolean;
+  isOverridden: boolean;
+  title: string;
+  description?: string | null;
+  type?: TaskType;
+  quadrant: EisenhowerQuadrant;
+  isGoldZone: boolean;
+  status: TaskStatus;
+  completedAt?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  estimatedMinutes: number;
+  rrule?: string | null;
 }
 
 export type EisenhowerMatrixData = Record<EisenhowerQuadrant, Task[]>;
@@ -114,12 +136,38 @@ export interface CreateTaskDto {
   startTime?: string;
   endTime?: string;
   estimatedMinutes?: number;
+  goalId?: string;
+  rrule?: string;
 }
 
 export interface ScheduleTaskDto {
   scheduledDate: string;
   startTime?: string;
   endTime?: string;
+}
+
+export interface UpdateOccurrenceStatusDto {
+  status: TaskStatus;
+}
+
+export interface OverrideOccurrenceDto {
+  title?: string;
+  description?: string;
+  startTime?: string;
+  endTime?: string;
+  quadrant?: EisenhowerQuadrant;
+}
+
+export interface UpdateOccurrenceStatusResult {
+  task: {
+    id: string;
+    occurrenceDate: string;
+    status: TaskStatus;
+    completedAt?: string | null;
+  };
+  xpGained: number;
+  currentXp: number;
+  currentLevel: number;
 }
 
 export interface TaskCompleteResult {
