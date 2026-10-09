@@ -5,6 +5,19 @@ import { Temporal } from "temporal-polyfill";
 import { RecurrenceConfig, RecurrenceUnit, RecurrenceEndType } from "@/types/recurrence.types";
 import { getDefaultRecurrenceConfig } from "@/utils/recurrence";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { DialogShell } from "@/components/ui/dialog-shell";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Presence, PresenceMount } from "@/components/ui/presence";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/shadcn/select";
+import { cn } from "@/lib/utils";
+import { FIELD_TRIGGER_CLASS } from "@/constants/picker.constants";
+import { TRANSITION_CLASSES } from "@/constants/transition.constants";
 
 interface CustomRecurrenceModalProps {
   isOpen: boolean;
@@ -25,11 +38,15 @@ const DAYS_OF_WEEK = [
 ];
 
 export const CustomRecurrenceModal: React.FC<CustomRecurrenceModalProps> = (props) => {
-  if (!props.isOpen) return null;
-  return <CustomRecurrenceModalContent {...props} />;
+  return (
+    <PresenceMount open={props.isOpen}>
+      <CustomRecurrenceModalContent {...props} />
+    </PresenceMount>
+  );
 };
 
 const CustomRecurrenceModalContent: React.FC<CustomRecurrenceModalProps> = ({
+  isOpen,
   onClose,
   onApply,
   initialConfig,
@@ -90,12 +107,7 @@ const CustomRecurrenceModalContent: React.FC<CustomRecurrenceModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-      <div
-        className="w-full max-w-sm rounded-xl bg-surface border border-border p-6 shadow-warm-lg space-y-6 text-text-primary animate-in zoom-in-95 duration-200"
-        role="dialog"
-        aria-modal="true"
-      >
+    <DialogShell open={isOpen} onClose={onClose} className="max-w-sm p-6 space-y-6">
         {/* Title */}
         <h3 className="text-xl font-serif-display font-bold tracking-tight text-text-primary">
           Lặp lại tùy chỉnh
@@ -114,44 +126,43 @@ const CustomRecurrenceModalContent: React.FC<CustomRecurrenceModalProps> = ({
               max={99}
               value={interval}
               onChange={(e) => setInterval(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-full bg-transparent text-sm font-semibold text-text-primary focus:outline-none"
+              className={cn("w-full bg-transparent text-sm font-semibold text-text-primary focus:outline-none", TRANSITION_CLASSES.INTERACTIVE)}
             />
             <div className="flex flex-col ml-1">
               <button
                 type="button"
                 onClick={() => setInterval((prev) => prev + 1)}
-                className="text-text-tertiary hover:text-text-primary p-0.5"
+                className="text-text-tertiary hover:text-text-primary p-0.5 transition-colors duration-150"
               >
                 <ChevronUp className="w-3 h-3 stroke-[1.8]" />
               </button>
               <button
                 type="button"
                 onClick={() => setInterval((prev) => Math.max(1, prev - 1))}
-                className="text-text-tertiary hover:text-text-primary p-0.5"
+                className="text-text-tertiary hover:text-text-primary p-0.5 transition-colors duration-150"
               >
                 <ChevronDown className="w-3 h-3 stroke-[1.8]" />
               </button>
             </div>
           </div>
 
-          <div className="relative flex-1">
-            <select
-              value={unit}
-              onChange={(e) => setUnit(e.target.value as RecurrenceUnit)}
-              className="w-full appearance-none bg-surface-secondary text-sm font-medium border border-border rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer text-text-primary"
-            >
-              <option value="day">ngày</option>
-              <option value="week">tuần</option>
-              <option value="month">tháng</option>
-              <option value="year">năm</option>
-            </select>
-            <ChevronDown className="w-4 h-4 text-text-tertiary absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none stroke-[1.8]" />
+          <div className="flex-1">
+            <Select value={unit} onValueChange={(v) => setUnit(v as RecurrenceUnit)}>
+              <SelectTrigger className={cn(FIELD_TRIGGER_CLASS, "w-full h-9 text-sm font-medium")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem value="day">ngày</SelectItem>
+                <SelectItem value="week">tuần</SelectItem>
+                <SelectItem value="month">tháng</SelectItem>
+                <SelectItem value="year">năm</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
         {/* 2. Repeat on (if week) */}
-        {unit === "week" && (
-          <div className="space-y-2">
+        <Presence show={unit === "week"} variant="collapse" className="space-y-2">
             <span className="text-xs font-semibold text-text-secondary block">
               Lặp lại vào
             </span>
@@ -175,8 +186,7 @@ const CustomRecurrenceModalContent: React.FC<CustomRecurrenceModalProps> = ({
                 );
               })}
             </div>
-          </div>
-        )}
+        </Presence>
 
         {/* 3. Ends */}
         <div className="space-y-3">
@@ -191,7 +201,7 @@ const CustomRecurrenceModalContent: React.FC<CustomRecurrenceModalProps> = ({
               name="endType"
               checked={endType === "never"}
               onChange={() => setEndType("never")}
-              className="w-4 h-4 accent-primary text-primary border-border focus:ring-primary cursor-pointer"
+              className={cn("w-4 h-4 accent-primary text-primary border-border focus:ring-primary cursor-pointer", TRANSITION_CLASSES.INTERACTIVE)}
             />
             <span className="text-sm text-text-primary">Không bao giờ</span>
           </label>
@@ -203,23 +213,19 @@ const CustomRecurrenceModalContent: React.FC<CustomRecurrenceModalProps> = ({
               name="endType"
               checked={endType === "on_date"}
               onChange={() => setEndType("on_date")}
-              className="w-4 h-4 accent-primary text-primary border-border focus:ring-primary cursor-pointer"
+              className={cn("w-4 h-4 accent-primary text-primary border-border focus:ring-primary cursor-pointer", TRANSITION_CLASSES.INTERACTIVE)}
             />
             <span className="text-sm text-text-primary whitespace-nowrap min-w-[65px]">
               Vào ngày
             </span>
-            <input
-              type="date"
+            <DatePicker
               value={endDate}
-              onFocus={() => setEndType("on_date")}
-              onClick={() => setEndType("on_date")}
-              onChange={(e) => {
+              onOpenChange={(open) => open && setEndType("on_date")}
+              onChange={(v) => {
                 setEndType("on_date");
-                setEndDate(e.target.value);
+                setEndDate(v);
               }}
-              className={`text-xs px-2.5 py-1.5 rounded-md border border-border bg-surface-secondary text-text-primary focus:outline-none focus:ring-1 focus:ring-primary transition-opacity ${
-                endType !== "on_date" ? "opacity-60" : "opacity-100"
-              }`}
+              className={`transition-[opacity,border-color] ${endType !== "on_date" ? "opacity-60" : "opacity-100"}`}
             />
           </label>
 
@@ -230,7 +236,7 @@ const CustomRecurrenceModalContent: React.FC<CustomRecurrenceModalProps> = ({
               name="endType"
               checked={endType === "after_occurrences"}
               onChange={() => setEndType("after_occurrences")}
-              className="w-4 h-4 accent-primary text-primary border-border focus:ring-primary cursor-pointer"
+              className={cn("w-4 h-4 accent-primary text-primary border-border focus:ring-primary cursor-pointer", TRANSITION_CLASSES.INTERACTIVE)}
             />
             <span className="text-sm text-text-primary whitespace-nowrap min-w-[65px]">
               Sau
@@ -273,7 +279,6 @@ const CustomRecurrenceModalContent: React.FC<CustomRecurrenceModalProps> = ({
             Xong
           </button>
         </div>
-      </div>
-    </div>
+    </DialogShell>
   );
 };

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { PageTreeItem } from '@/types/notes.types';
 import { cn } from '@/lib/utils';
+import { Presence } from '@/components/ui/presence';
 import { ChevronRight, Plus, Trash2, FileText } from 'lucide-react';
 
 interface PageTreeNodeProps {
@@ -95,9 +96,8 @@ export const PageTreeNode: React.FC<PageTreeNodeProps> = ({
       </div>
 
       {/* Recursive Sub-Pages */}
-      {isExpanded && item.children && item.children.length > 0 && (
-        <div className="space-y-0.5 mt-0.5">
-          {item.children.map((child) => (
+      <Presence show={isExpanded && !!item.children && item.children.length > 0} variant="collapse" className="space-y-0.5 mt-0.5">
+          {item.children?.map((child) => (
             <PageTreeNode
               key={child.id}
               item={child}
@@ -108,8 +108,7 @@ export const PageTreeNode: React.FC<PageTreeNodeProps> = ({
               depth={depth + 1}
             />
           ))}
-        </div>
-      )}
+      </Presence>
     </div>
   );
 };

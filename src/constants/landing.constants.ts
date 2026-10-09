@@ -232,6 +232,44 @@ export const FEYNMAN_PRESETS_DATA: FeynmanPreset[] = [
   },
 ];
 
+export const LANDING_SECTIONS_COPY = {
+  features: {
+    eyebrow: "Giá trị cốt lõi",
+    title: "Tập trung vào điều thực sự quan trọng",
+    subtitle:
+      "Ba trụ cột gắn kết với nhau: mục tiêu rõ ràng, ghi chép có hành động và động lực bền bỉ mỗi ngày.",
+  },
+  comparison: {
+    eyebrow: "Khác biệt",
+    title: "Tại sao dùng Gọn thay vì mở 3–4 app?",
+    subtitle: "Một nơi duy nhất thay cho cả bộ công cụ rời rạc.",
+    criteriaLabel: "Tiêu chí",
+    notionObsidianLabel: "Notion / Obsidian",
+    todoistTickTickLabel: "Todoist / TickTick",
+    gonLabel: "🌿 Gọn Web",
+  },
+  faq: {
+    eyebrow: "Hỏi đáp",
+    title: "Câu hỏi thường gặp",
+  },
+  finalCta: {
+    badge: "LOCK IN NGAY",
+    titleBefore: "Làm mọi thứ",
+    titleHighlight: "Gọn gàng",
+    titleAfter: "và bắt đầu tập trung vào điều thực sự quan trọng.",
+    primaryText: "Bắt đầu dùng thử miễn phí →",
+    secondaryText: "Mở Trang Làm Việc ↗",
+    footnote: "Không cần thẻ tín dụng • Mở trình duyệt dùng ngay • 0ms đồng bộ",
+  },
+  footer: {
+    brand: "Gọn Web OS",
+    tagline: "Tối ưu thời gian, tập trung việc quan trọng.",
+  },
+} as const;
+
+/** Độ trễ (ms) giữa các phần tử xuất hiện nối tiếp khi cuộn tới */
+export const LANDING_REVEAL_STAGGER_MS = 90;
+
 export const LANDING_FAQ_DATA: FaqItem[] = [
   {
     id: "faq-1",

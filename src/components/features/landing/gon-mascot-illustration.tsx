@@ -404,8 +404,12 @@ export const GonMascotIllustration: React.FC<GonMascotIllustrationProps> = ({
           </g>
 
           {/* 7. Scene Specific Overlays: Star sparkles for celebration / reward */}
-          {isHappy && (
-            <g id="celebrationSparkles" filter="url(#softGlow)">
+          <g
+            id="celebrationSparkles"
+            filter="url(#softGlow)"
+            aria-hidden={!isHappy}
+            className={`transition-opacity duration-300 ${isHappy ? "opacity-100 ease-out" : "opacity-0 ease-in"}`}
+          >
               {/* Golden Star Sparkle 1 */}
               <path
                 d="M320 120 L323 130 L333 133 L323 136 L320 146 L317 136 L307 133 L317 130 Z"
@@ -419,8 +423,7 @@ export const GonMascotIllustration: React.FC<GonMascotIllustrationProps> = ({
               {/* Mini Sparkle 3 */}
               <circle cx="340" cy="165" r="2.5" fill="#fef08a" />
               <circle cx="120" cy="175" r="2" fill="#fef08a" />
-            </g>
-          )}
+          </g>
 
           {/* 8. Floating Status Badge ("Bé Gọn @Deep Work") */}
           <g id="floatingPill" transform="translate(160, 296)">

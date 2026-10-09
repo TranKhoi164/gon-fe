@@ -3,6 +3,9 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import { MascotMood } from "@/types/landing.types";
+import { Presence } from "@/components/ui/presence";
+import { TRANSITION_CLASSES } from "@/constants/transition.constants";
+import { cn } from "@/lib/utils";
 import { MASCOT_CARD_CONFIG } from "@/constants/landing.constants";
 
 interface GonMiniMascotProps {
@@ -171,11 +174,12 @@ export const GonMascotHeroCard: React.FC = () => {
           />
 
           {/* Floating Live XP Toast when interacting */}
-          {isBoosted && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 rounded-md bg-primary text-on-primary font-mono font-bold text-xs shadow-md animate-bounce">
-              ✨ +50 EXP • Bé Gọn đang tập trung cùng bạn!
-            </div>
-          )}
+          <Presence
+            show={isBoosted}
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 rounded-md bg-primary text-on-primary font-mono font-bold text-xs shadow-md animate-bounce"
+          >
+            ✨ +50 EXP • Bé Gọn đang tập trung cùng bạn!
+          </Presence>
 
           {/* Top-left editorial label */}
           <div className="absolute top-3 left-3 z-10">
@@ -195,7 +199,7 @@ export const GonMascotHeroCard: React.FC = () => {
                   type="checkbox"
                   checked={completedTask}
                   onChange={() => {}}
-                  className="w-3.5 h-3.5 accent-primary rounded-xs cursor-pointer"
+                  className={cn("w-3.5 h-3.5 accent-primary rounded-xs cursor-pointer", TRANSITION_CLASSES.INTERACTIVE)}
                 />
                 <span
                   className={`text-xs font-medium ${

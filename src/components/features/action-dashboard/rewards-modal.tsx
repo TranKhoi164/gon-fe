@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import { PendingReward, ClaimRewardResult } from "@/types/dashboard.types";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
+import { Presence } from "@/components/ui/presence";
+import { useRetainedValue } from "@/hooks/usePresence";
 import { Badge } from "@/components/ui/badge";
 
 export interface RewardsModalProps {
@@ -21,6 +23,8 @@ export const RewardsModal: React.FC<RewardsModalProps> = ({
 }) => {
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [claimedResult, setClaimedResult] = useState<ClaimRewardResult | null>(null);
+  // Giữ kết quả trong lúc banner chạy exit transition
+  const displayedResult = useRetainedValue(claimedResult);
 
   const handleClaim = async (id: string) => {
     setClaimingId(id);
@@ -46,8 +50,8 @@ export const RewardsModal: React.FC<RewardsModalProps> = ({
     >
       <div className="space-y-4">
         {/* Celebration Banner when just claimed */}
-        {claimedResult ? (
-          <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/20 via-primary/20 to-emerald-500/20 border border-accent-gold text-center space-y-1.5 animate-in zoom-in-95 duration-200">
+        <Presence show={!!claimedResult} variant="collapse">
+          <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/20 via-primary/20 to-emerald-500/20 border border-accent-gold text-center space-y-1.5">
             <span className="text-3xl">🎉</span>
             <h4 className="text-base font-black text-amber-500">
               Nhận Thưởng Thành Công!
@@ -55,15 +59,15 @@ export const RewardsModal: React.FC<RewardsModalProps> = ({
             <p className="text-xs text-text-primary">
               Bạn vừa nhận được{" "}
               <span className="font-bold text-accent-gold">
-                +{claimedResult.claimedXp} XP
+                +{displayedResult?.claimedXp} XP
               </span>
               . Cấp độ hiện tại:{" "}
               <span className="font-bold text-primary">
-                Level {claimedResult.newLevel} ({claimedResult.tierTitle})
+                Level {displayedResult?.newLevel} ({displayedResult?.tierTitle})
               </span>
             </p>
           </div>
-        ) : null}
+        </Presence>
 
         {/* Pending Rewards List */}
         <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">

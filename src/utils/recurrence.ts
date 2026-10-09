@@ -244,3 +244,46 @@ export function rruleToFriendlyVi(rrule?: string | null): string {
 }
 
 
+
+export type RecurrencePreset = "none" | "daily" | "weekly" | "monthly" | "custom";
+
+/**
+ * Builds a recurrence config from a quick preset. Returns undefined for "custom"
+ * (caller should open the custom recurrence editor instead).
+ */
+export function buildPresetRecurrence(
+  preset: RecurrencePreset,
+  baseDateStr: string
+): RecurrenceConfig | null | undefined {
+  switch (preset) {
+    case "none":
+      return null;
+    case "daily":
+      return { interval: 1, unit: "day", daysOfWeek: [], endType: "never" };
+    case "weekly": {
+      let day = 1;
+      try {
+        day = Temporal.PlainDate.from(baseDateStr).dayOfWeek % 7;
+      } catch {
+        day = baseDateStr ? new Date(baseDateStr).getDay() : 1;
+      }
+      return { interval: 1, unit: "week", daysOfWeek: [day], endType: "never" };
+    }
+    case "monthly":
+      return { interval: 1, unit: "month", daysOfWeek: [], endType: "never" };
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Maps a recurrence config back to the closest quick preset (for select inputs)
+ */
+export function getRecurrencePreset(config?: RecurrenceConfig | null): RecurrencePreset {
+  if (!config) return "none";
+  if (config.interval !== 1 || config.endType !== "never") return "custom";
+  if (config.unit === "day") return "daily";
+  if (config.unit === "week" && config.daysOfWeek.length <= 1) return "weekly";
+  if (config.unit === "month") return "monthly";
+  return "custom";
+}

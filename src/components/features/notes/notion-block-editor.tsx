@@ -17,6 +17,9 @@ import { useCreateBlockNote, useEditorChange } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { Theme } from "@blocknote/mantine";
 
+import { Presence } from "@/components/ui/presence";
+import { useRetainedValue } from "@/hooks/usePresence";
+import { TRANSITION_CLASSES } from "@/constants/transition.constants";
 import {
   Star,
   Zap,
@@ -134,6 +137,8 @@ export const NotionBlockEditor: React.FC<NotionBlockEditorProps> = ({
   const [title, setTitle] = useState(page.title);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  // Giữ trạng thái lưu cuối cùng trong lúc badge chạy exit transition
+  const displayedSaveStatus = useRetainedValue(saveStatus === "idle" ? null : saveStatus);
   const titleInputRef = useRef<HTMLTextAreaElement>(null);
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const latestBlocksRef = useRef<NotionBlock[] | null>(null);
@@ -237,26 +242,28 @@ export const NotionBlockEditor: React.FC<NotionBlockEditorProps> = ({
         {/* Right Controls */}
         <div className="flex items-center gap-2 shrink-0">
           {/* Autosave Status Badge */}
-          <div className="flex items-center gap-1.5 text-[11px] text-text-tertiary mr-1">
-            {saveStatus === "saving" && (
+          <Presence show={saveStatus !== "idle"} className="flex items-center gap-1.5 text-[11px] text-text-tertiary mr-1">
+            <span key={displayedSaveStatus} className={cn("flex items-center gap-1.5", TRANSITION_CLASSES.FADE_IN)}>
+            {displayedSaveStatus === "saving" && (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-accent-gold" />
                 <span className="hidden sm:inline">Đang lưu...</span>
               </>
             )}
-            {saveStatus === "saved" && (
+            {displayedSaveStatus === "saved" && (
               <>
                 <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
                 <span className="text-primary font-medium hidden sm:inline">Đã lưu</span>
               </>
             )}
-            {saveStatus === "error" && (
+            {displayedSaveStatus === "error" && (
               <>
                 <AlertCircle className="w-3.5 h-3.5 text-error" />
                 <span className="text-error font-medium hidden sm:inline">Lỗi</span>
               </>
             )}
-          </div>
+            </span>
+          </Presence>
 
           {/* Extract to Task Button */}
           <button
@@ -294,9 +301,9 @@ export const NotionBlockEditor: React.FC<NotionBlockEditorProps> = ({
             title="Sao chép toàn bộ trang dạng Markdown"
           >
             {isCopied ? (
-              <Check className="w-3.5 h-3.5 text-primary stroke-[2.5]" />
+              <Check className={cn("w-3.5 h-3.5 text-primary stroke-[2.5]", TRANSITION_CLASSES.FADE_IN)} />
             ) : (
-              <FileDown className="w-3.5 h-3.5" />
+              <FileDown className={cn("w-3.5 h-3.5", TRANSITION_CLASSES.FADE_IN)} />
             )}
           </button>
 
@@ -335,7 +342,7 @@ export const NotionBlockEditor: React.FC<NotionBlockEditorProps> = ({
             <button
               type="button"
               onClick={handleAddCover}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface/90 hover:bg-surface text-text-primary text-xs font-medium shadow-md backdrop-blur-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface/90 hover:bg-surface text-text-primary text-xs font-medium shadow-md backdrop-blur-xs cursor-pointer transition-colors duration-150"
             >
               <ImageIcon className="w-3.5 h-3.5" />
               <span>Đổi ảnh bìa</span>
@@ -343,7 +350,7 @@ export const NotionBlockEditor: React.FC<NotionBlockEditorProps> = ({
             <button
               type="button"
               onClick={() => onUpdateMetadata({ coverImageUrl: null })}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface/90 hover:bg-surface text-error text-xs font-medium shadow-md backdrop-blur-xs cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface/90 hover:bg-surface text-error text-xs font-medium shadow-md backdrop-blur-xs cursor-pointer transition-colors duration-150"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Xóa ảnh</span>
@@ -377,8 +384,11 @@ export const NotionBlockEditor: React.FC<NotionBlockEditorProps> = ({
           </button>
 
           {/* Emoji Suggestions Popover */}
-          {isEmojiPickerOpen && (
-            <div className="absolute z-30 mt-2 p-2.5 bg-surface border border-border rounded-xl shadow-xl flex items-center gap-1.5 flex-wrap w-64 animate-in fade-in zoom-in-95">
+          <Presence
+            show={isEmojiPickerOpen}
+            variant="pop"
+            className="absolute z-30 mt-2 p-2.5 bg-surface border border-border rounded-xl shadow-xl flex items-center gap-1.5 flex-wrap w-64 origin-top-left"
+          >
               {EMOJI_SUGGESTIONS.map((emoji) => (
                 <button
                   key={emoji}
@@ -392,8 +402,7 @@ export const NotionBlockEditor: React.FC<NotionBlockEditorProps> = ({
                   {emoji}
                 </button>
               ))}
-            </div>
-          )}
+          </Presence>
         </div>
 
         {/* Page Title Editable Textarea (Slim Editorial Serif) */}

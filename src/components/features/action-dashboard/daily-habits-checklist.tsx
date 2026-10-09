@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TRANSITION_CLASSES } from "@/constants/transition.constants";
+import { cn } from "@/lib/utils";
 import { Sun, Sparkles, Clock, CheckCircle2 } from "lucide-react";
 
 export interface DailyHabitsChecklistProps {
@@ -88,7 +90,7 @@ export const DailyHabitsChecklist: React.FC<DailyHabitsChecklistProps> = ({
                   checked={isDone}
                   disabled={isLoading}
                   onChange={() => {}} // handled by parent div onClick
-                  className="h-4 w-4 rounded border-border text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                  className={cn("h-4 w-4 rounded border-border text-emerald-600 focus:ring-emerald-500 cursor-pointer", TRANSITION_CLASSES.INTERACTIVE)}
                 />
                 <div className="p-1 rounded-lg bg-surface-tertiary flex-shrink-0 text-text-secondary">
                   <Sparkles className="w-4 h-4 stroke-[1.8]" />

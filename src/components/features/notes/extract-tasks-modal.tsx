@@ -5,6 +5,9 @@ import { NotionBlock } from '@/types/notes.types';
 import { notesService } from '@/services/notesService';
 import { cn } from '@/lib/utils';
 import { Zap, X, FileText, Loader2 } from 'lucide-react';
+import { DialogShell } from '@/components/ui/dialog-shell';
+import { PresenceMount } from '@/components/ui/presence';
+import { TRANSITION_CLASSES } from '@/constants/transition.constants';
 
 interface ExtractTasksModalProps {
   pageId: string;
@@ -35,7 +38,15 @@ function getTodoBlockTitle(b: NotionBlock): string {
   return '';
 }
 
-export const ExtractTasksModal: React.FC<ExtractTasksModalProps> = ({
+export const ExtractTasksModal: React.FC<ExtractTasksModalProps> = (props) => {
+  return (
+    <PresenceMount open={props.isOpen}>
+      <ExtractTasksModalContent {...props} />
+    </PresenceMount>
+  );
+};
+
+const ExtractTasksModalContent: React.FC<ExtractTasksModalProps> = ({
   pageId,
   pageTitle,
   blocks,
@@ -49,8 +60,6 @@ export const ExtractTasksModal: React.FC<ExtractTasksModalProps> = ({
   });
   const [selectedIds, setSelectedIds] = useState<string[]>(todoBlocks.map((b) => b.id));
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  if (!isOpen) return null;
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) =>
@@ -83,8 +92,12 @@ export const ExtractTasksModal: React.FC<ExtractTasksModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg bg-surface rounded-xl shadow-warm-lg border-0 p-6 space-y-4">
+    <DialogShell
+      open={isOpen}
+      onClose={onClose}
+      overlayClassName="bg-black/30"
+      className="relative max-w-lg border-0 p-6 space-y-4"
+    >
         {/* Header */}
         <div className="flex items-center justify-between pb-3">
           <div className="flex items-center gap-3">
@@ -125,7 +138,7 @@ export const ExtractTasksModal: React.FC<ExtractTasksModalProps> = ({
               <button
                 type="button"
                 onClick={toggleSelectAll}
-                className="text-primary hover:underline font-medium text-xs cursor-pointer"
+                className="text-primary hover:underline font-medium text-xs cursor-pointer transition-colors duration-150"
               >
                 {selectedIds.length === todoBlocks.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
               </button>
@@ -149,7 +162,7 @@ export const ExtractTasksModal: React.FC<ExtractTasksModalProps> = ({
                       type="checkbox"
                       checked={isChecked}
                       onChange={() => toggleSelect(b.id)}
-                      className="w-4 h-4 rounded text-primary accent-primary cursor-pointer"
+                      className={cn("w-4 h-4 rounded text-primary accent-primary cursor-pointer", TRANSITION_CLASSES.INTERACTIVE)}
                     />
                     <span className="flex-1 truncate">{getTodoBlockTitle(b)}</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-gold-soft text-accent-gold font-semibold shrink-0">
@@ -192,7 +205,6 @@ export const ExtractTasksModal: React.FC<ExtractTasksModalProps> = ({
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </DialogShell>
   );
 };

@@ -14,6 +14,9 @@ import {
   PendingReward,
 } from "@/types/dashboard.types";
 
+// Tạm ẩn Phễu Mục Tiêu (MAZE AIM) trên dashboard — đổi thành true để hiện lại
+export const SHOW_GOAL_FUNNEL_BANNER = false;
+
 export interface QuadrantMeta {
   key: EisenhowerQuadrant;
   title: string;

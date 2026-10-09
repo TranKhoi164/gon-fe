@@ -19,6 +19,8 @@ const NotionBlockEditor = dynamic(
   }
 );
 import { useNotesPage } from '@/hooks/useNotesPage';
+import { Presence } from '@/components/ui/presence';
+import { useRetainedValue } from '@/hooks/usePresence';
 import { CheckCircle2 } from 'lucide-react';
 
 export default function NotesPage() {
@@ -44,6 +46,8 @@ export default function NotesPage() {
     handleRestorePage,
     handleDuplicatePage,
   } = useNotesPage();
+  // Giữ nội dung toast trong lúc chạy exit transition
+  const displayedToast = useRetainedValue(toastMessage);
 
   return (
     <div className="h-screen w-full bg-background flex overflow-hidden">
@@ -91,12 +95,13 @@ export default function NotesPage() {
       />
 
       {/* Floating Action Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl bg-surface-dark border border-border-dark text-text-primary-dark text-xs font-semibold shadow-warm-lg flex items-center gap-2 animate-in slide-in-from-bottom-2 duration-150">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 stroke-[2]" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+      <Presence
+        show={!!toastMessage}
+        className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl bg-surface-dark border border-border-dark text-text-primary-dark text-xs font-semibold shadow-warm-lg flex items-center gap-2"
+      >
+        <CheckCircle2 className="w-4 h-4 text-emerald-400 stroke-[2]" />
+        <span>{displayedToast}</span>
+      </Presence>
     </div>
   );
 }

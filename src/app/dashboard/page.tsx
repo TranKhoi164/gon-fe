@@ -9,7 +9,7 @@ import { CalendarGridView } from "@/components/features/action-dashboard/calenda
 import { BatchingBucket } from "@/components/features/action-dashboard/batching-bucket";
 import { FastCaptureModal } from "@/components/features/action-dashboard/fast-capture-modal";
 import { RewardsModal } from "@/components/features/action-dashboard/rewards-modal";
-import { LayoutGrid, Calendar, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { GoogleCalendarTaskModal } from "@/components/features/action-dashboard/google-calendar-task-modal";
 import { RecurrenceConfig } from "@/types/recurrence.types";
 
@@ -34,6 +34,7 @@ import {
   INITIAL_EISENHOWER_TASKS_MOCK,
   INITIAL_BATCHING_TASKS_MOCK,
   INITIAL_PENDING_REWARDS_MOCK,
+  SHOW_GOAL_FUNNEL_BANNER,
 } from "@/constants/dashboard.constants";
 import {
   GoalLevelEnum,
@@ -42,6 +43,11 @@ import {
   TaskStatusEnum,
   DashboardViewModeEnum,
 } from "@/constants/dashboard.enums";
+import { Presence } from "@/components/ui/presence";
+import { useRetainedValue } from "@/hooks/usePresence";
+import { TaskRescheduleChange } from "@/utils/calendarEvent";
+import { QUICK_CREATE_ALL_DAY_START, QUICK_CREATE_ALL_DAY_END } from "@/constants/calendar-quick-create.constants";
+import { ViewModeToggle } from "@/components/features/action-dashboard/view-mode-toggle";
 import { TOAST_MESSAGES } from "@/constants/messages.constants";
 
 export default function ActionDashboardPage() {
@@ -56,9 +62,11 @@ export default function ActionDashboardPage() {
     start.setDate(start.getDate() - 7);
     const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     end.setDate(end.getDate() + 7);
+    const toLocalDateStr = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     return {
-      start: start.toISOString().split("T")[0],
-      end: end.toISOString().split("T")[0],
+      start: toLocalDateStr(start),
+      end: toLocalDateStr(end),
     };
   });
   const [batchingTasks, setBatchingTasks] = useState<Task[]>(INITIAL_BATCHING_TASKS_MOCK);
@@ -68,6 +76,8 @@ export default function ActionDashboardPage() {
   const [isFastCaptureOpen, setIsFastCaptureOpen] = useState(false);
   const [isRewardsModalOpen, setIsRewardsModalOpen] = useState(false);
   const [xpToast, setXpToast] = useState<{ message: string } | null>(null);
+  // Giữ nội dung toast trong lúc chạy exit transition
+  const displayedXpToast = useRetainedValue(xpToast);
 
   const [isGoogleTaskModalOpen, setIsGoogleTaskModalOpen] = useState(false);
   const [googleModalInitialData, setGoogleModalInitialData] = useState<{
@@ -107,9 +117,24 @@ export default function ActionDashboardPage() {
 
   // Range change callback from calendar
   const handleRangeChange = useCallback((startStr: string, endStr: string) => {
-    setCalendarRange({ start: startStr, end: endStr });
-    fetchCalendarTasks(startStr, endStr);
-  }, [fetchCalendarTasks]);
+    setCalendarRange((prev) =>
+      prev.start === startStr && prev.end === endStr ? prev : { start: startStr, end: endStr }
+    );
+  }, []);
+
+  // Fetch calendar theo range; bỏ qua response cũ khi user chuyển tuần/tháng liên tục
+  useEffect(() => {
+    let isCurrent = true;
+    dashboardService
+      .getCalendarTasks(calendarRange.start, calendarRange.end)
+      .then((data) => {
+        if (isCurrent) setCalendarTasks(data);
+      })
+      .catch((err) => console.error("Fetch calendar tasks error:", err));
+    return () => {
+      isCurrent = false;
+    };
+  }, [calendarRange.start, calendarRange.end]);
 
   // Initial Data Fetching
   useEffect(() => {
@@ -122,14 +147,12 @@ export default function ActionDashboardPage() {
         fetchedMatrix,
         fetchedBatching,
         fetchedRewards,
-        fetchedCalendarTasks,
       ] = await Promise.all([
         dashboardService.getDashboardStats(),
         dashboardService.getGoalFunnel(),
         dashboardService.getEisenhowerTasks(todayStr, includeUnscheduled),
         dashboardService.getBatchingTasks(),
         dashboardService.getPendingRewards(),
-        dashboardService.getCalendarTasks(calendarRange.start, calendarRange.end),
       ]);
 
       if (isMounted) {
@@ -138,7 +161,6 @@ export default function ActionDashboardPage() {
         setEisenhowerData(fetchedMatrix);
         setBatchingTasks(fetchedBatching);
         setPendingRewards(fetchedRewards);
-        setCalendarTasks(fetchedCalendarTasks);
       }
     };
 
@@ -146,7 +168,7 @@ export default function ActionDashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, [calendarRange.start, calendarRange.end, includeUnscheduled]);
+  }, [includeUnscheduled]);
 
   // Global Ctrl+K Listener
   useEffect(() => {
@@ -397,6 +419,27 @@ export default function ActionDashboardPage() {
     );
   };
 
+  // Đồng bộ lại lịch, ma trận & thùng batching sau khi tạo nhanh/auto-save
+  const refreshTaskViews = async () => {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const [matrix, batching] = await Promise.all([
+      dashboardService.getEisenhowerTasks(todayStr, includeUnscheduled),
+      dashboardService.getBatchingTasks(),
+      fetchCalendarTasks(calendarRange.start, calendarRange.end),
+    ]);
+    setEisenhowerData(matrix);
+    setBatchingTasks(batching);
+  };
+
+  // Quick-create popover trên lịch: tạo mới khi người dùng bấm Lưu
+  const handleQuickCreateTask = async (dto: CreateTaskDto) => {
+    const createdTask = await dashboardService.createTask(dto);
+    await refreshTaskViews();
+    triggerXpToast(dto.rrule ? "Đã tạo chuỗi công việc lặp lại thành công!" : TOAST_MESSAGES.TASK_CREATED);
+    return createdTask;
+  };
+
+
   // Toggle Occurrence Status (Tick/Untick)
   const handleToggleOccurrenceStatus = async (
     id: string,
@@ -466,6 +509,21 @@ export default function ActionDashboardPage() {
     triggerXpToast("Đã bỏ qua công việc cho ngày này!");
   };
 
+  // Nút chuyển chế độ xem: nằm ở đầu hàng header của Ma trận / Lịch (thay cho thanh riêng)
+  const viewModeToggle = <ViewModeToggle value={viewMode} onChange={setViewMode} />;
+
+  // Kéo thả / kéo giãn trên lịch: task lặp → chỉ đổi giờ của lần lặp đó; task thường → đổi ngày & giờ
+  const handleRescheduleTask = async (task: CalendarTaskItem, change: TaskRescheduleChange) => {
+    const startTime = `${change.isAllDay ? QUICK_CREATE_ALL_DAY_START : change.startTime}:00`;
+    const endTime = `${change.isAllDay ? QUICK_CREATE_ALL_DAY_END : change.endTime}:00`;
+    if (task.isRecurring) {
+      await dashboardService.overrideOccurrence(task.id, task.occurrenceDate, { startTime, endTime });
+    } else {
+      await dashboardService.scheduleTask(task.id, { scheduledDate: change.date, startTime, endTime });
+    }
+    await fetchCalendarTasks(calendarRange.start, calendarRange.end);
+  };
+
   // Update Entire Series
   const handleUpdateTaskSeries = async (id: string, dto: Partial<CreateTaskDto>) => {
     await dashboardService.updateTaskSeries(id, dto);
@@ -526,15 +584,16 @@ export default function ActionDashboardPage() {
       <Sidebar userStats={stats} onOpenFastCapture={() => setIsFastCaptureOpen(true)} />
 
       {/* Floating XP Reward Toast */}
-      {xpToast ? (
-        <div className="fixed top-6 right-6 z-50 px-4 py-2.5 rounded-lg bg-accent-gold text-slate-950 font-bold text-xs shadow-warm-lg animate-in slide-in-from-top-3 duration-300 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-slate-950" />
-          <span>{xpToast.message}</span>
-        </div>
-      ) : null}
+      <Presence
+        show={!!xpToast}
+        className="fixed top-6 right-6 z-50 px-4 py-2.5 rounded-lg bg-accent-gold text-slate-950 font-bold text-xs shadow-warm-lg flex items-center gap-2"
+      >
+        <Sparkles className="w-4 h-4 text-slate-950" />
+        <span>{displayedXpToast?.message}</span>
+      </Presence>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-w-0 max-w-7xl mx-auto p-4 md:p-6 space-y-6 overflow-y-auto">
+      <main className="flex-1 min-w-0 max-w-7xl mx-auto p-4 md:p-6 space-y-3 overflow-y-auto">
           {/* Gamified Header Bar with Tier, Streak & Check-in */}
           <GamifiedHeaderBar
             stats={stats}
@@ -544,42 +603,13 @@ export default function ActionDashboardPage() {
           />
 
           {/* 3-3-3 Goal Funnel Banner (MAZE AIM) */}
-          <GoalFunnelBanner
-            funnel={funnel}
-            onAddGoal={handleAddGoal}
-            onDeleteGoal={handleDeleteGoal}
-          />
-
-          {/* View Mode Switcher Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-surface px-3.5 py-2 rounded-xl shadow-warm border border-border/40">
-            <span className="text-[11px] font-bold text-text-tertiary uppercase tracking-wider font-serif-display">
-              Chế Độ Xem Hành Động
-            </span>
-            <div className="flex items-center gap-1 p-0.5 bg-surface-secondary rounded-lg">
-              <button
-                onClick={() => setViewMode(DashboardViewModeEnum.EISENHOWER)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
-                  viewMode === DashboardViewModeEnum.EISENHOWER
-                    ? "bg-primary text-on-primary shadow-warm-xs"
-                    : "text-text-secondary hover:text-text-primary"
-                }`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span>Ma Trận Eisenhower</span>
-              </button>
-              <button
-                onClick={() => setViewMode(DashboardViewModeEnum.CALENDAR)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
-                  viewMode === DashboardViewModeEnum.CALENDAR
-                    ? "bg-primary text-on-primary shadow-warm-xs"
-                    : "text-text-secondary hover:text-text-primary"
-                }`}
-              >
-                <Calendar className="w-3.5 h-3.5" />
-                <span>Lịch Biểu Timeboxing</span>
-              </button>
-            </div>
-          </div>
+          {SHOW_GOAL_FUNNEL_BANNER && (
+            <GoalFunnelBanner
+              funnel={funnel}
+              onAddGoal={handleAddGoal}
+              onDeleteGoal={handleDeleteGoal}
+            />
+          )}
 
           {/* Conditional View: Eisenhower Matrix vs Calendar Grid */}
           {viewMode === DashboardViewModeEnum.EISENHOWER ? (
@@ -590,6 +620,7 @@ export default function ActionDashboardPage() {
               onOpenCreateModal={(q) => handleOpenGoogleTaskModal({ quadrant: q })}
               includeUnscheduled={includeUnscheduled}
               onToggleIncludeUnscheduled={handleToggleIncludeUnscheduled}
+              headerLeading={viewModeToggle}
             />
           ) : (
             <CalendarGridView
@@ -601,6 +632,9 @@ export default function ActionDashboardPage() {
               onCancelOccurrence={handleCancelOccurrence}
               onUpdateSeries={handleUpdateTaskSeries}
               onDeleteSeries={handleDeleteTaskSeries}
+              onQuickCreateTask={handleQuickCreateTask}
+              onRescheduleTask={handleRescheduleTask}
+              headerLeading={viewModeToggle}
             />
           )}
 

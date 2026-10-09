@@ -1,7 +1,7 @@
 "use client";
 
 import "temporal-polyfill/global";
-import React, { useState, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore } from "react";
 import { ScheduleXCalendar, useNextCalendarApp } from "@schedule-x/react";
 import {
   createViewDay,
@@ -27,7 +27,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Calendar as CalendarIcon,
-  Plus,
   Sparkles,
   Clock,
   CheckCircle2,
@@ -38,6 +37,37 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { rruleToFriendlyVi } from "@/utils/recurrence";
+import { addMinutesToTime, isAllDayTimeRange, snapTime } from "@/utils/quickCreateTask";
+import { QuickCreateTaskPopover } from "./quick-create-task-popover";
+import { CALENDAR_EVENT_COMPONENTS, CalendarEventActionsContext } from "./calendar-event-card";
+import { CALENDAR_HEADER_COMPONENTS, CalendarHeaderSlotsContext } from "./calendar-header-slots";
+import { createCalendarPlugins } from "@/lib/schedule-x-plugins";
+import { useTaskStatusToggle } from "@/hooks/useTaskStatusToggle";
+import { CALENDAR_DND_INTERVAL_MINUTES, CALENDAR_QUADRANT_THEME } from "@/constants/calendar.constants";
+import { compareCalendarEvents, getRescheduleChange, getTaskEventId, TaskRescheduleChange } from "@/utils/calendarEvent";
+import { DialogShell } from "@/components/ui/dialog-shell";
+import { usePresence, useRetainedValue } from "@/hooks/usePresence";
+import { TRANSITION_MS, TRANSITION_CLASSES } from "@/constants/transition.constants";
+import { QuickCreateDraft, QuickCreateHandlers } from "@/types/calendar-quick-create.types";
+import { useQuickCreateDrafts } from "@/hooks/useQuickCreateDrafts";
+import { TimePicker } from "@/components/ui/time-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/shadcn/select";
+import { cn } from "@/lib/utils";
+import { FIELD_TRIGGER_CLASS } from "@/constants/picker.constants";
+import {
+  QUICK_CREATE_DEFAULT_END,
+  QUICK_CREATE_DEFAULT_START,
+  QUICK_CREATE_DRAFT_EVENT_ID,
+  QUICK_CREATE_LABELS,
+  QUICK_CREATE_SNAP_MINUTES,
+  QUICK_CREATE_QUADRANT_OPTIONS,
+} from "@/constants/calendar-quick-create.constants";
 
 export interface CalendarGridViewProps {
   tasks: CalendarTaskItem[];
@@ -54,62 +84,13 @@ export interface CalendarGridViewProps {
   onCancelOccurrence?: (id: string, date: string) => Promise<void>;
   onUpdateSeries?: (id: string, dto: Partial<CreateTaskDto>) => Promise<void>;
   onDeleteSeries?: (id: string) => Promise<void>;
+  /** Tạo nhanh qua popover (lưu khi bấm Lưu). Thiếu thì fallback về onOpenCreateModal */
+  onQuickCreateTask?: QuickCreateHandlers["onCreate"];
+  /** Nội dung đặt ở đầu hàng header của lịch (vd. nút chuyển chế độ xem) */
+  headerLeading?: React.ReactNode;
+  /** Đổi ngày/giờ sau khi kéo thả hoặc kéo giãn sự kiện. Thiếu thì tắt kéo thả */
+  onRescheduleTask?: (task: CalendarTaskItem, change: TaskRescheduleChange) => Promise<void>;
 }
-
-const QUADRANTS_THEME = {
-  [EisenhowerQuadrantEnum.GOLD_ZONE]: {
-    colorName: "goldZone",
-    lightColors: {
-      main: "#c8832a",
-      container: "#faebd7",
-      onContainer: "#6b4312",
-    },
-    darkColors: {
-      main: "#e2a84e",
-      container: "#382613",
-      onContainer: "#faebd7",
-    },
-  },
-  [EisenhowerQuadrantEnum.DO_FIRST]: {
-    colorName: "doFirst",
-    lightColors: {
-      main: "#b84e46",
-      container: "#fae8e6",
-      onContainer: "#632520",
-    },
-    darkColors: {
-      main: "#df7068",
-      container: "#381a17",
-      onContainer: "#fae8e6",
-    },
-  },
-  [EisenhowerQuadrantEnum.DELEGATE]: {
-    colorName: "delegate",
-    lightColors: {
-      main: "#527a5d",
-      container: "#eaf2ec",
-      onContainer: "#233b2a",
-    },
-    darkColors: {
-      main: "#6ea07c",
-      container: "#1a2b1f",
-      onContainer: "#eaf2ec",
-    },
-  },
-  [EisenhowerQuadrantEnum.ELIMINATE]: {
-    colorName: "eliminate",
-    lightColors: {
-      main: "#7c7267",
-      container: "#f2ede4",
-      onContainer: "#3b352f",
-    },
-    darkColors: {
-      main: "#9e9488",
-      container: "#28231f",
-      onContainer: "#f2ede4",
-    },
-  },
-};
 
 function formatHHMMSS(t: string): string {
   const parts = t.split(":");
@@ -119,7 +100,91 @@ function formatHHMMSS(t: string): string {
   return `${h}:${m}:${s}`;
 }
 
+function taskToCalendarEvent(
+  task: CalendarTaskItem,
+  tz: string,
+  todayStr: string
+): CalendarEventExternal {
+  const dateStr = task.occurrenceDate || todayStr;
+  const quadrantKey = task.quadrant || EisenhowerQuadrantEnum.GOLD_ZONE;
+
+  // Unique event ID: combine id & occurrenceDate for recurring occurrences
+  const eventId = getTaskEventId({ ...task, occurrenceDate: dateStr });
+
+  let startTemporal: Temporal.ZonedDateTime | Temporal.PlainDate;
+  let endTemporal: Temporal.ZonedDateTime | Temporal.PlainDate;
+
+  // Schedule-X phân loại theo kiểu Temporal: start & end đều là PlainDate → hàng all-day trên cùng.
+  // Task cả ngày (không có giờ, hoặc quy ước 00:00–23:59) phải đi nhánh PlainDate, không được rơi xuống nhánh có giờ.
+  const isAllDay = !task.startTime || isAllDayTimeRange(task.startTime, task.endTime);
+
+  if (isAllDay) {
+    startTemporal = Temporal.PlainDate.from(dateStr);
+    endTemporal = Temporal.PlainDate.from(dateStr);
+  } else if (task.startTime && task.endTime) {
+    try {
+      startTemporal = Temporal.PlainDateTime.from(
+        `${dateStr}T${formatHHMMSS(task.startTime)}`
+      ).toZonedDateTime(tz);
+      endTemporal = Temporal.PlainDateTime.from(
+        `${dateStr}T${formatHHMMSS(task.endTime)}`
+      ).toZonedDateTime(tz);
+      // Giờ kết thúc <= giờ bắt đầu (qua nửa đêm) → kết thúc vào ngày hôm sau
+      if (Temporal.ZonedDateTime.compare(endTemporal, startTemporal) <= 0) {
+        endTemporal = endTemporal.add({ days: 1 });
+      }
+    } catch {
+      startTemporal = Temporal.PlainDate.from(dateStr);
+      endTemporal = Temporal.PlainDate.from(dateStr);
+    }
+  } else if (task.startTime) {
+    try {
+      const s = Temporal.PlainDateTime.from(
+        `${dateStr}T${formatHHMMSS(task.startTime)}`
+      ).toZonedDateTime(tz);
+      startTemporal = s;
+      endTemporal = s.add({ minutes: task.estimatedMinutes || 60 });
+    } catch {
+      startTemporal = Temporal.PlainDate.from(dateStr);
+      endTemporal = Temporal.PlainDate.from(dateStr);
+    }
+  } else {
+    startTemporal = Temporal.PlainDate.from(dateStr);
+    endTemporal = Temporal.PlainDate.from(dateStr);
+  }
+
+  return {
+    id: eventId,
+    title: task.isRecurring ? `🔁 ${task.title}` : task.title,
+    description: task.description || undefined,
+    calendarId: quadrantKey,
+    start: startTemporal,
+    end: endTemporal,
+    _originalTask: task,
+  };
+}
+
+/** Dựng CalendarTaskItem giả từ draft tạo nhanh để vẽ sự kiện nháp */
+function draftToPreviewTask(draft: QuickCreateDraft): CalendarTaskItem {
+  return {
+    id: QUICK_CREATE_DRAFT_EVENT_ID,
+    occurrenceDate: draft.scheduledDate,
+    isRecurring: false,
+    isOverridden: false,
+    title: draft.title.trim() || QUICK_CREATE_LABELS.UNTITLED,
+    quadrant: draft.quadrant,
+    isGoldZone: draft.quadrant === EisenhowerQuadrantEnum.GOLD_ZONE,
+    status: TaskStatusEnum.TODO,
+    startTime: draft.isAllDay ? null : draft.startTime,
+    endTime: draft.isAllDay ? null : draft.endTime,
+    estimatedMinutes: 60,
+  };
+}
+
 const emptySubscribe = () => () => {};
+
+/** Custom components cho ScheduleXCalendar — tham chiếu ổn định ở module scope (đổi tham chiếu = calendar render lại từ đầu) */
+const CALENDAR_CUSTOM_COMPONENTS = { ...CALENDAR_EVENT_COMPONENTS, ...CALENDAR_HEADER_COMPONENTS };
 
 export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
   tasks,
@@ -131,6 +196,9 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
   onCancelOccurrence,
   onUpdateSeries,
   onDeleteSeries,
+  onQuickCreateTask,
+  onRescheduleTask,
+  headerLeading,
 }) => {
   const isMounted = useSyncExternalStore(
     emptySubscribe,
@@ -140,6 +208,8 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
 
   const [selectedEventTask, setSelectedEventTask] = useState<CalendarTaskItem | null>(null);
   const [modalMode, setModalMode] = useState<"view" | "edit" | "delete">("view");
+  // Giữ dữ liệu task trong lúc modal chạy exit transition
+  const displayedTask = useRetainedValue(selectedEventTask);
 
   // Edit form state
   const [editTitle, setEditTitle] = useState("");
@@ -149,79 +219,110 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
   const [editScope, setEditScope] = useState<"instance" | "series">("instance");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Keep refs for stable callback references
-  const onOpenCreateModalRef = useRef(onOpenCreateModal);
-  useEffect(() => {
-    onOpenCreateModalRef.current = onOpenCreateModal;
-  }, [onOpenCreateModal]);
+  // Quick-create popover (giống Google Calendar) khi click vào ô lịch
+  const calendarWrapperRef = useRef<HTMLDivElement>(null);
+  const quickCreate = useQuickCreateDrafts();
+  const { open: openQuickCreate, close: closeQuickCreate, updateDraft, drafts: quickDrafts } = quickCreate;
+  const hasQuickCreate = !!onQuickCreateTask;
 
+  // Popover đang mở lúc bắt đầu click → click đó chỉ dùng để đóng popover, không tạo draft mới (giống Google Calendar)
+  const isQuickCreateOpenRef = useRef(false);
+  const clickStartedWhileOpenRef = useRef(false);
+  useEffect(() => {
+    isQuickCreateOpenRef.current = !!quickCreate.activeSlot;
+  }, [quickCreate.activeSlot]);
+
+  const openSlotRef = useRef<(slot: { date: string; startTime: string; endTime: string }, e?: UIEvent) => void>(
+    () => {}
+  );
+  useEffect(() => {
+    openSlotRef.current = (slot, e) => {
+      if (clickStartedWhileOpenRef.current || isQuickCreateOpenRef.current) {
+        clickStartedWhileOpenRef.current = false;
+        closeQuickCreate();
+        return;
+      }
+      if (!hasQuickCreate) {
+        onOpenCreateModal?.(slot);
+        return;
+      }
+      const rect = calendarWrapperRef.current?.getBoundingClientRect();
+      const pointer = e && "clientX" in e ? (e as MouseEvent) : null;
+      const anchor =
+        rect && pointer
+          ? { x: pointer.clientX - rect.left, y: pointer.clientY - rect.top }
+          : { x: (rect?.width ?? 0) / 2, y: 80 };
+      // Thêm draft vào state ngay lập tức → sự kiện hiện trên lịch trước khi lưu DB
+      openQuickCreate({ ...slot, anchor });
+    };
+  }, [hasQuickCreate, onOpenCreateModal, openQuickCreate, closeQuickCreate]);
+
+  const activeQuickKey = quickCreate.activeSlot?.key;
+  // Giữ popover (với slot/draft cuối) trong DOM để Radix chạy xong exit animation
+  const quickCreatePresence = usePresence(!!quickCreate.activeSlot, TRANSITION_MS.POPOVER);
+  const displayedQuickSlot = useRetainedValue(quickCreate.activeSlot);
+  const displayedQuickDraft = useRetainedValue(quickCreate.activeDraft);
+  const handleQuickPreviewChange = useCallback(
+    (draft: QuickCreateDraft) => {
+      if (activeQuickKey !== undefined) updateDraft(activeQuickKey, draft);
+    },
+    [activeQuickKey, updateDraft]
+  );
+
+  // Keep refs for stable callback references
   const onSelectTaskRef = useRef(onSelectTask);
   useEffect(() => {
     onSelectTaskRef.current = onSelectTask;
   }, [onSelectTask]);
+
+  const tasksRef = useRef(tasks);
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
+
+  const findTaskByEventId = (eventId: string | number) =>
+    tasksRef.current.find((t) => getTaskEventId(t) === String(eventId));
+
+  // Tick hoàn thành (optimistic) — dùng chung cho ô sự kiện và modal chi tiết
+  const { getStatus, toggleStatus } = useTaskStatusToggle(onToggleOccurrenceStatus);
+  const eventActions = useMemo(() => ({ getStatus, toggleStatus }), [getStatus, toggleStatus]);
+  const headerSlots = useMemo(
+    () => ({ leading: headerLeading, onCreate: onOpenCreateModal ? () => onOpenCreateModal() : undefined }),
+    [headerLeading, onOpenCreateModal]
+  );
+
+  // Plugin kéo thả / kéo giãn: tạo 1 lần cho calendar app
+  const [calendarPlugins] = useState(() => createCalendarPlugins(CALENDAR_DND_INTERVAL_MINUTES));
 
   const onRangeChangeRef = useRef(onRangeChange);
   useEffect(() => {
     onRangeChangeRef.current = onRangeChange;
   }, [onRangeChange]);
 
-  // Convert tasks to Schedule-X events
+  // Convert tasks (+ quick-create draft) to Schedule-X events
   const mappedEvents = useMemo<CalendarEventExternal[]>(() => {
     const tz = Temporal.Now.timeZoneId();
     const todayStr = Temporal.Now.plainDateISO().toString();
 
-    return tasks.map((task) => {
-      const dateStr = task.occurrenceDate || todayStr;
-      const quadrantKey = task.quadrant || EisenhowerQuadrantEnum.GOLD_ZONE;
+    const events = tasks.map((task) => taskToCalendarEvent(task, tz, todayStr));
 
-      // Unique event ID: combine id & occurrenceDate for recurring occurrences
-      const eventId = task.isRecurring ? `${task.id}_${dateStr}` : task.id;
-
-      let startTemporal: Temporal.ZonedDateTime | Temporal.PlainDate;
-      let endTemporal: Temporal.ZonedDateTime | Temporal.PlainDate;
-
-      if (task.startTime && task.endTime) {
-        try {
-          startTemporal = Temporal.PlainDateTime.from(
-            `${dateStr}T${formatHHMMSS(task.startTime)}`
-          ).toZonedDateTime(tz);
-          endTemporal = Temporal.PlainDateTime.from(
-            `${dateStr}T${formatHHMMSS(task.endTime)}`
-          ).toZonedDateTime(tz);
-        } catch {
-          startTemporal = Temporal.PlainDate.from(dateStr);
-          endTemporal = Temporal.PlainDate.from(dateStr);
-        }
-      } else if (task.startTime) {
-        try {
-          const s = Temporal.PlainDateTime.from(
-            `${dateStr}T${formatHHMMSS(task.startTime)}`
-          ).toZonedDateTime(tz);
-          startTemporal = s;
-          endTemporal = s.add({ minutes: task.estimatedMinutes || 60 });
-        } catch {
-          startTemporal = Temporal.PlainDate.from(dateStr);
-          endTemporal = Temporal.PlainDate.from(dateStr);
-        }
-      } else {
-        startTemporal = Temporal.PlainDate.from(dateStr);
-        endTemporal = Temporal.PlainDate.from(dateStr);
-      }
-
-      return {
-        id: eventId,
-        title: task.isRecurring ? `🔁 ${task.title}` : task.title,
-        description: task.description || undefined,
-        calendarId: quadrantKey,
-        start: startTemporal,
-        end: endTemporal,
-        _originalTask: task,
-      };
+    quickDrafts.forEach(({ key, draft }) => {
+      events.push({
+        ...taskToCalendarEvent(draftToPreviewTask(draft), tz, todayStr),
+        id: `${QUICK_CREATE_DRAFT_EVENT_ID}_${key}`,
+      });
     });
-  }, [tasks]);
+    return events.sort(compareCalendarEvents);
+  }, [tasks, quickDrafts]);
+
+  const mappedEventsRef = useRef(mappedEvents);
+  useEffect(() => {
+    mappedEventsRef.current = mappedEvents;
+  }, [mappedEvents]);
 
   // Initialize Calendar App
-  const calendar = useNextCalendarApp({
+  const calendar = useNextCalendarApp(
+    {
     views: [
       createViewWeek(),
       createViewDay(),
@@ -229,8 +330,10 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
       createViewMonthAgenda(),
     ],
     defaultView: "week",
+    // Schedule-X mặc định hiển thị theo UTC → phải dùng múi giờ local, nếu không sự kiện bị lệch giờ
+    timezone: Temporal.Now.timeZoneId(),
     selectedDate: Temporal.Now.plainDateISO(),
-    calendars: QUADRANTS_THEME,
+    calendars: CALENDAR_QUADRANT_THEME,
     dayBoundaries: {
       start: "06:00",
       end: "23:00",
@@ -240,6 +343,14 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
       gridStep: 60,
     },
     callbacks: {
+      // Chặn trước các vị trí không lưu được (nhiều ngày, đổi cả ngày ↔ có giờ, task lặp sang ngày khác, nháp)
+      onBeforeEventUpdate(_oldEvent, newEvent) {
+        const task = findTaskByEventId(newEvent.id);
+        return !!task && !!onRescheduleRef.current && !!getRescheduleChange(task, newEvent.start, newEvent.end);
+      },
+      onEventUpdate(updatedEvent) {
+        void handleEventUpdateRef.current(updatedEvent);
+      },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onRangeUpdate(range: any) {
         try {
@@ -253,77 +364,90 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
         }
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      onClickDateTime(dateTime: any) {
+      onClickDateTime(dateTime: any, e?: UIEvent) {
         try {
           let dateStr = "";
-          let startStr = "09:00";
-          let endStr = "10:00";
+          let startStr = QUICK_CREATE_DEFAULT_START;
 
           if (dateTime && typeof dateTime.toPlainDate === "function") {
             dateStr = dateTime.toPlainDate().toString();
             startStr = dateTime.toPlainTime().toString().slice(0, 5);
-            endStr = dateTime
-              .add({ hours: 1 })
-              .toPlainTime()
-              .toString()
-              .slice(0, 5);
           } else if (typeof dateTime === "string") {
-            const normalized = dateTime.replace("T", " ").trim();
-            const [d, t] = normalized.split(" ");
+            const [d, t] = dateTime.replace("T", " ").trim().split(" ");
             dateStr = d;
-            if (t) {
-              startStr = t.slice(0, 5);
-              const [h, m] = startStr.split(":").map(Number);
-              const nextH = Math.min(23, (h || 9) + 1);
-              endStr = `${String(nextH).padStart(2, "0")}:${String(m || 0).padStart(2, "0")}`;
-            }
+            if (t) startStr = t.slice(0, 5);
           }
 
           if (dateStr) {
-            onOpenCreateModalRef.current?.({
-              date: dateStr,
-              startTime: startStr,
-              endTime: endStr,
-            });
+            const snappedStart = snapTime(startStr, QUICK_CREATE_SNAP_MINUTES);
+            openSlotRef.current(
+              {
+                date: dateStr,
+                startTime: snappedStart,
+                endTime: addMinutesToTime(snappedStart, 60),
+              },
+              e
+            );
           }
-        } catch (e) {
-          console.error("onClickDateTime parse error:", e);
+        } catch (err) {
+          console.error("onClickDateTime parse error:", err);
         }
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      onClickDate(date: any) {
+      onClickDate(date: any, e?: UIEvent) {
         try {
           const raw = typeof date?.toString === "function" ? date.toString() : String(date);
           const dateStr = raw.replace("T", " ").split(" ")[0];
           if (dateStr) {
-            onOpenCreateModalRef.current?.({
-              date: dateStr,
-              startTime: "09:00",
-              endTime: "10:00",
-            });
+            openSlotRef.current(
+              {
+                date: dateStr,
+                startTime: QUICK_CREATE_DEFAULT_START,
+                endTime: QUICK_CREATE_DEFAULT_END,
+              },
+              e
+            );
           }
-        } catch (e) {
-          console.error("onClickDate parse error:", e);
+        } catch (err) {
+          console.error("onClickDate parse error:", err);
         }
       },
       onEventClick(calendarEvent) {
-        const found = tasks.find((t) => {
-          const expectedEventId = t.isRecurring ? `${t.id}_${t.occurrenceDate}` : t.id;
-          return expectedEventId === calendarEvent.id || t.id === calendarEvent.id;
-        });
+        const found = findTaskByEventId(calendarEvent.id);
 
         if (found) {
           setSelectedEventTask(found);
           setModalMode("view");
           setEditTitle(found.title);
-          setEditStartTime(found.startTime ? found.startTime.slice(0, 5) : "09:00");
-          setEditEndTime(found.endTime ? found.endTime.slice(0, 5) : "10:00");
+          const allDay = isAllDayTimeRange(found.startTime, found.endTime);
+          setEditStartTime(found.startTime && !allDay ? found.startTime.slice(0, 5) : "");
+          setEditEndTime(found.endTime && !allDay ? found.endTime.slice(0, 5) : "");
           setEditQuadrant(found.quadrant);
           setEditScope(found.isRecurring ? "instance" : "series");
           onSelectTaskRef.current?.(found);
         }
       },
     },
+    },
+    calendarPlugins
+  );
+
+  // Lưu vị trí mới sau kéo thả / kéo giãn; lỗi thì trả sự kiện về chỗ cũ
+  const onRescheduleRef = useRef(onRescheduleTask);
+  const handleEventUpdateRef = useRef<(event: CalendarEventExternal) => Promise<void>>(async () => {});
+  useEffect(() => {
+    onRescheduleRef.current = onRescheduleTask;
+    handleEventUpdateRef.current = async (event) => {
+      const task = findTaskByEventId(event.id);
+      const change = task && getRescheduleChange(task, event.start, event.end);
+      if (!task || !change || !onRescheduleTask) return;
+      try {
+        await onRescheduleTask(task, change);
+      } catch (err) {
+        console.error("Error rescheduling task:", err);
+        calendar?.events.set(mappedEventsRef.current);
+      }
+    };
   });
 
   // Keep calendar events in sync with incoming tasks
@@ -332,34 +456,6 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
       calendar.events.set(mappedEvents);
     }
   }, [calendar, mappedEvents]);
-
-  // Handle Tick/Untick status
-  const handleToggleStatus = async () => {
-    if (!selectedEventTask) return;
-    const nextStatus =
-      selectedEventTask.status === TaskStatusEnum.COMPLETED
-        ? TaskStatusEnum.TODO
-        : TaskStatusEnum.COMPLETED;
-
-    // Optimistic local update
-    setSelectedEventTask((prev) => (prev ? { ...prev, status: nextStatus } : null));
-
-    try {
-      if (onToggleOccurrenceStatus) {
-        await onToggleOccurrenceStatus(
-          selectedEventTask.id,
-          selectedEventTask.occurrenceDate,
-          nextStatus
-        );
-      }
-    } catch (err) {
-      console.error("Error toggling occurrence status:", err);
-      // Revert if error
-      setSelectedEventTask((prev) =>
-        prev ? { ...prev, status: selectedEventTask.status } : null
-      );
-    }
-  };
 
   // Handle Save Edit
   const handleSaveEdit = async () => {
@@ -431,7 +527,7 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
 
   if (!isMounted) {
     return (
-      <Card className="w-full h-[520px] flex items-center justify-center bg-surface rounded-xl border border-border">
+      <Card className="w-full h-[640px] flex items-center justify-center bg-surface rounded-xl border border-border">
         <div className="flex flex-col items-center gap-2 text-text-tertiary">
           <CalendarIcon className="w-7 h-7 animate-pulse text-primary" />
           <span className="text-xs font-medium">Đang tải lịch biểu...</span>
@@ -441,90 +537,71 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
   }
 
   return (
-    <Card className="w-full space-y-3 bg-surface p-3 sm:p-4 shadow-warm rounded-xl border border-border">
-      {/* Compact Unified Header Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-border/50">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-            <CalendarIcon className="w-4 h-4 text-primary stroke-[2]" />
-          </div>
-          <div>
-            <h3 className="text-sm sm:text-base font-serif-display font-bold text-text-primary leading-tight">
-              Lịch Biểu Timeboxing
-            </h3>
-            <p className="text-[11px] text-text-tertiary hidden sm:block">
-              Hỗ trợ công việc định kỳ ảo RFC 5545 và quản lý trạng thái riêng từng ngày
-            </p>
-          </div>
-        </div>
-
-        {/* Inline Matrix Legend & Action Button */}
-        <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
-          <div className="flex items-center gap-2.5 text-[11px] font-medium text-text-secondary overflow-x-auto py-0.5">
-            <span className="flex items-center gap-1.5 shrink-0" title="Quan trọng & Lên lịch (+30 XP)">
-              <span className="w-2 h-2 rounded-full bg-[#c8832a]" />
-              <span>Gold Zone</span>
-            </span>
-            <span className="flex items-center gap-1.5 shrink-0" title="Khẩn cấp & Quan trọng (+20 XP)">
-              <span className="w-2 h-2 rounded-full bg-[#b84e46]" />
-              <span>Do First</span>
-            </span>
-            <span className="flex items-center gap-1.5 shrink-0" title="Khẩn cấp & Ủy quyền (+10 XP)">
-              <span className="w-2 h-2 rounded-full bg-[#527a5d]" />
-              <span>Delegate</span>
-            </span>
-            <span className="flex items-center gap-1.5 shrink-0" title="Loại bỏ / Việc vặt (+5 XP)">
-              <span className="w-2 h-2 rounded-full bg-[#7c7267]" />
-              <span>Eliminate</span>
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onOpenCreateModal?.()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-hover text-on-primary font-medium text-xs rounded-md shadow-warm-xs hover:shadow-warm transition-all active:scale-95 shrink-0 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2]" />
-            <span>Tạo công việc</span>
-          </button>
-        </div>
-      </div>
-
+    <Card className="w-full p-0 overflow-hidden bg-surface shadow-warm rounded-xl border border-border">
       {/* Schedule-X Calendar Wrapper */}
-      <div className="w-full overflow-hidden rounded-lg border border-border/80 shadow-warm-xs bg-surface min-h-[520px]">
-        {calendar && <ScheduleXCalendar calendarApp={calendar} />}
+      <div
+        ref={calendarWrapperRef}
+        onPointerDownCapture={() => {
+          clickStartedWhileOpenRef.current = isQuickCreateOpenRef.current;
+        }}
+        className="relative w-full overflow-hidden bg-surface min-h-[640px]"
+      >
+        {calendar && (
+          <CalendarHeaderSlotsContext.Provider value={headerSlots}>
+            <CalendarEventActionsContext.Provider value={eventActions}>
+              <ScheduleXCalendar calendarApp={calendar} customComponents={CALENDAR_CUSTOM_COMPONENTS} />
+            </CalendarEventActionsContext.Provider>
+          </CalendarHeaderSlotsContext.Provider>
+        )}
+
+        {quickCreatePresence.isMounted && displayedQuickSlot && displayedQuickDraft && onQuickCreateTask && (
+          <QuickCreateTaskPopover
+            key={displayedQuickSlot.key}
+            open={!!quickCreate.activeSlot}
+            anchor={displayedQuickSlot.anchor}
+            anchorEventId={`${QUICK_CREATE_DRAFT_EVENT_ID}_${displayedQuickSlot.key}`}
+            initialDraft={displayedQuickDraft.draft}
+            onClose={quickCreate.close}
+            onPreviewChange={handleQuickPreviewChange}
+            onCreate={onQuickCreateTask}
+          />
+        )}
       </div>
 
       {/* Interactive Task Details & Action Modal */}
-      {selectedEventTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-xl bg-surface border border-border p-5 shadow-warm-lg space-y-4 animate-in zoom-in-95 duration-200">
+      {displayedTask && (
+        <DialogShell
+          open={!!selectedEventTask}
+          onClose={() => setSelectedEventTask(null)}
+          overlayClassName="bg-black/40"
+          className="max-w-md p-5 space-y-4"
+        >
             {/* Header */}
             <div className="flex items-start justify-between gap-2 border-b border-border/50 pb-3">
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <Badge
-                    variant={selectedEventTask.isGoldZone ? "gold" : "primary"}
+                    variant={displayedTask.isGoldZone ? "gold" : "primary"}
                     className="text-[10px] font-medium rounded-md inline-flex items-center gap-1"
                   >
-                    {selectedEventTask.isGoldZone ? (
+                    {displayedTask.isGoldZone ? (
                       <>
                         <Sparkles className="w-3 h-3 text-accent-gold stroke-[1.8]" />
                         <span>Gold Zone (+30 XP)</span>
                       </>
                     ) : (
-                      <span>{selectedEventTask.quadrant}</span>
+                      <span>{displayedTask.quadrant}</span>
                     )}
                   </Badge>
 
-                  {selectedEventTask.isRecurring && (
+                  {displayedTask.isRecurring && (
                     <Badge variant="primary" className="text-[10px] inline-flex items-center gap-1">
                       <Repeat className="w-3 h-3" />
-                      <span>{rruleToFriendlyVi(selectedEventTask.rrule)}</span>
+                      <span>{rruleToFriendlyVi(displayedTask.rrule)}</span>
                     </Badge>
                   )}
 
-                  {selectedEventTask.isOverridden && (
+                  {displayedTask.isOverridden && (
                     <Badge variant="amber" className="text-[10px] inline-flex items-center gap-1">
                       ✏️ Đã đổi lịch riêng ngày này
                     </Badge>
@@ -532,7 +609,7 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
                 </div>
 
                 <h4 className="text-base font-serif-display font-bold text-text-primary leading-snug">
-                  {selectedEventTask.title}
+                  {displayedTask.title}
                 </h4>
               </div>
 
@@ -547,10 +624,10 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
 
             {/* Modal Body: VIEW MODE */}
             {modalMode === "view" && (
-              <div className="space-y-4">
-                {selectedEventTask.description && (
+              <div className={cn("space-y-4", TRANSITION_CLASSES.FADE_IN)}>
+                {displayedTask.description && (
                   <p className="text-xs text-text-secondary whitespace-pre-wrap bg-surface-secondary p-3 rounded-lg border border-border">
-                    {selectedEventTask.description}
+                    {displayedTask.description}
                   </p>
                 )}
 
@@ -558,18 +635,23 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
                   <div className="flex items-center gap-2">
                     <CalendarIcon className="w-3.5 h-3.5 stroke-[1.8]" />
                     <span className="text-text-secondary font-medium">
-                      {selectedEventTask.occurrenceDate}
+                      {displayedTask.occurrenceDate}
                     </span>
-                    {selectedEventTask.startTime && selectedEventTask.endTime && (
-                      <span>({selectedEventTask.startTime} – {selectedEventTask.endTime})</span>
+                    {isAllDayTimeRange(displayedTask.startTime, displayedTask.endTime) ? (
+                      <span>({QUICK_CREATE_LABELS.ALL_DAY})</span>
+                    ) : (
+                      displayedTask.startTime &&
+                      displayedTask.endTime && (
+                        <span>({displayedTask.startTime.slice(0, 5)} – {displayedTask.endTime.slice(0, 5)})</span>
+                      )
                     )}
                   </div>
 
-                  {selectedEventTask.estimatedMinutes && (
+                  {displayedTask.estimatedMinutes && (
                     <div className="flex items-center gap-2">
                       <Clock className="w-3.5 h-3.5 stroke-[1.8]" />
                       <span>
-                        Dự kiến: <strong className="text-text-secondary">{selectedEventTask.estimatedMinutes} phút</strong>
+                        Dự kiến: <strong className="text-text-secondary">{displayedTask.estimatedMinutes} phút</strong>
                       </span>
                     </div>
                   )}
@@ -578,8 +660,8 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
                     <CheckCircle2 className="w-3.5 h-3.5 stroke-[1.8]" />
                     <span>
                       Trạng thái:{" "}
-                      <strong className={selectedEventTask.status === TaskStatusEnum.COMPLETED ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-text-secondary"}>
-                        {selectedEventTask.status === TaskStatusEnum.COMPLETED ? "Đã hoàn thành" : "Cần làm (TODO)"}
+                      <strong className={getStatus(displayedTask) === TaskStatusEnum.COMPLETED ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-text-secondary"}>
+                        {getStatus(displayedTask) === TaskStatusEnum.COMPLETED ? "Đã hoàn thành" : "Cần làm (TODO)"}
                       </strong>
                     </span>
                   </div>
@@ -589,16 +671,16 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
                   <button
                     type="button"
-                    onClick={handleToggleStatus}
+                    onClick={() => toggleStatus(displayedTask)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      selectedEventTask.status === TaskStatusEnum.COMPLETED
+                      getStatus(displayedTask) === TaskStatusEnum.COMPLETED
                         ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
                         : "bg-primary text-on-primary hover:bg-primary-hover shadow-warm-xs"
                     }`}
                   >
                     <CheckCircle2 className="w-3.5 h-3.5 stroke-[2]" />
                     <span>
-                      {selectedEventTask.status === TaskStatusEnum.COMPLETED
+                      {getStatus(displayedTask) === TaskStatusEnum.COMPLETED
                         ? "Hoàn thành (Bấm để hủy)"
                         : "Đánh dấu hoàn thành"}
                     </span>
@@ -628,53 +710,51 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
 
             {/* Modal Body: EDIT MODE */}
             {modalMode === "edit" && (
-              <div className="space-y-3 animate-in fade-in duration-150">
+              <div className={cn("space-y-3", TRANSITION_CLASSES.FADE_IN)}>
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold text-text-secondary">Tiêu đề công việc:</label>
                   <input
                     type="text"
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
-                    className="w-full text-xs bg-surface-secondary border border-border rounded-lg px-2.5 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className={cn("w-full text-xs bg-surface-secondary border border-border rounded-lg px-2.5 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-primary", TRANSITION_CLASSES.INTERACTIVE)}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="text-[11px] font-semibold text-text-secondary">Giờ bắt đầu:</label>
-                    <input
-                      type="time"
-                      value={editStartTime}
-                      onChange={(e) => setEditStartTime(e.target.value)}
-                      className="w-full text-xs bg-surface-secondary border border-border rounded-lg px-2.5 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
+                    <TimePicker value={editStartTime} onChange={setEditStartTime} showIcon className="w-full rounded-lg" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[11px] font-semibold text-text-secondary">Giờ kết thúc:</label>
-                    <input
-                      type="time"
+                    <TimePicker
                       value={editEndTime}
-                      onChange={(e) => setEditEndTime(e.target.value)}
-                      className="w-full text-xs bg-surface-secondary border border-border rounded-lg px-2.5 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      onChange={setEditEndTime}
+                      durationFrom={editStartTime || undefined}
+                      showIcon
+                      className="w-full rounded-lg"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold text-text-secondary">Mức độ ưu tiên (Eisenhower):</label>
-                  <select
-                    value={editQuadrant}
-                    onChange={(e) => setEditQuadrant(e.target.value as EisenhowerQuadrant)}
-                    className="w-full text-xs bg-surface-secondary border border-border rounded-lg px-2.5 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value={EisenhowerQuadrantEnum.GOLD_ZONE}>Gold Zone (Q2 - Quan trọng • Lên lịch)</option>
-                    <option value={EisenhowerQuadrantEnum.DO_FIRST}>Do First (Q1 - Khẩn cấp & Quan trọng)</option>
-                    <option value={EisenhowerQuadrantEnum.DELEGATE}>Delegate (Q3 - Khẩn cấp • Ủy quyền)</option>
-                    <option value={EisenhowerQuadrantEnum.ELIMINATE}>Eliminate (Q4 - Loại bỏ • Gom việc)</option>
-                  </select>
+                  <Select value={editQuadrant} onValueChange={(v) => setEditQuadrant(v as EisenhowerQuadrant)}>
+                    <SelectTrigger size="sm" className={cn(FIELD_TRIGGER_CLASS, "w-full")}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      {QUICK_CREATE_QUADRANT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.key} value={opt.key} className="text-xs">
+                          {opt.name} — {opt.hint}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                {selectedEventTask.isRecurring && (
+                {displayedTask.isRecurring && (
                   <div className="space-y-1.5 p-2.5 bg-surface-secondary rounded-lg border border-border text-xs">
                     <label className="font-semibold text-text-primary block">Phạm vi áp dụng chỉnh sửa:</label>
                     <div className="space-y-1">
@@ -684,9 +764,9 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
                           name="editScope"
                           checked={editScope === "instance"}
                           onChange={() => setEditScope("instance")}
-                          className="accent-primary"
+                          className={cn("accent-primary", TRANSITION_CLASSES.INTERACTIVE)}
                         />
-                        <span>Chỉ ngày này ({selectedEventTask.occurrenceDate})</span>
+                        <span>Chỉ ngày này ({displayedTask.occurrenceDate})</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer text-text-secondary">
                         <input
@@ -694,7 +774,7 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
                           name="editScope"
                           checked={editScope === "series"}
                           onChange={() => setEditScope("series")}
-                          className="accent-primary"
+                          className={cn("accent-primary", TRANSITION_CLASSES.INTERACTIVE)}
                         />
                         <span>Toàn bộ chuỗi lặp lại</span>
                       </label>
@@ -707,7 +787,7 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
                     type="button"
                     disabled={isSubmitting}
                     onClick={() => setModalMode("view")}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-surface-secondary text-text-secondary hover:text-text-primary border border-border cursor-pointer"
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-surface-secondary text-text-secondary hover:text-text-primary border border-border cursor-pointer transition-colors duration-150"
                   >
                     Hủy
                   </button>
@@ -715,7 +795,7 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
                     type="button"
                     disabled={isSubmitting || !editTitle.trim()}
                     onClick={handleSaveEdit}
-                    className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-primary text-on-primary hover:bg-primary-hover shadow-warm-xs cursor-pointer disabled:opacity-50"
+                    className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-primary text-on-primary hover:bg-primary-hover shadow-warm-xs cursor-pointer disabled:opacity-50 transition-colors duration-150"
                   >
                     {isSubmitting ? "Đang lưu..." : "Lưu thay đổi"}
                   </button>
@@ -725,14 +805,14 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
 
             {/* Modal Body: DELETE CONFIRMATION */}
             {modalMode === "delete" && (
-              <div className="space-y-3 animate-in fade-in duration-150">
+              <div className={cn("space-y-3", TRANSITION_CLASSES.FADE_IN)}>
                 <p className="text-xs text-text-secondary leading-relaxed">
-                  {selectedEventTask.isRecurring
+                  {displayedTask.isRecurring
                     ? "Đây là một công việc lặp lại định kỳ. Bạn muốn xóa theo cách nào?"
                     : "Bạn có chắc chắn muốn xóa công việc này không?"}
                 </p>
 
-                {selectedEventTask.isRecurring ? (
+                {displayedTask.isRecurring ? (
                   <div className="space-y-2 pt-1">
                     <button
                       type="button"
@@ -743,7 +823,7 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
                       <div>
                         <div className="font-semibold">Chỉ xóa ngày này</div>
                         <div className="text-[10px] text-text-tertiary">
-                          Bỏ qua ngày {selectedEventTask.occurrenceDate}, giữ nguyên các ngày khác
+                          Bỏ qua ngày {displayedTask.occurrenceDate}, giữ nguyên các ngày khác
                         </div>
                       </div>
                       <RotateCcw className="w-3.5 h-3.5 text-text-tertiary" />
@@ -782,15 +862,14 @@ export const CalendarGridView: React.FC<CalendarGridViewProps> = ({
                     type="button"
                     disabled={isSubmitting}
                     onClick={() => setModalMode("view")}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-surface-secondary text-text-secondary hover:text-text-primary border border-border cursor-pointer"
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-surface-secondary text-text-secondary hover:text-text-primary border border-border cursor-pointer transition-colors duration-150"
                   >
                     Quay lại
                   </button>
                 </div>
               </div>
             )}
-          </div>
-        </div>
+        </DialogShell>
       )}
     </Card>
   );

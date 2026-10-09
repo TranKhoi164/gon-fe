@@ -1,5 +1,9 @@
 @import "tailwindcss";
 @import "prismjs/themes/prism-tomorrow.css";
+@import "tw-animate-css";
+
+/* `dark:` bám theo class .dark (nút chuyển theme) thay vì theo cài đặt hệ điều hành */
+@custom-variant dark (&:is(.dark *));
 
 :root,
 .light {
@@ -81,6 +85,7 @@
   --warning: #e2a84e;
   --warning-soft: rgba(226, 168, 78, 0.15);
   --success: #6ea07c;
+  --success-soft: rgba(110, 160, 124, 0.15);
 }
 
 @theme inline {
@@ -116,12 +121,104 @@
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
 
+  /* shadcn/ui aliases — ánh xạ token của shadcn sang bảng màu Gọn (không có palette riêng) */
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text-primary);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text-primary);
+  --color-primary-foreground: var(--on-primary);
+  --color-secondary: var(--surface-secondary);
+  --color-secondary-foreground: var(--text-primary);
+  --color-muted: var(--surface-secondary);
+  --color-muted-foreground: var(--text-tertiary);
+  --color-accent: var(--surface-tertiary);
+  --color-accent-foreground: var(--text-primary);
+  --color-destructive: var(--error);
+  --color-input: var(--border);
+  --color-ring: var(--primary);
+
   /* Rounded geometry - gọn gàng, tinh tế theo Modern UI Components */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
   --radius-2xl: 14px;
+
+  /* Motion tokens - chuyển động mềm, chậm vừa phải */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-fade-up: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-glow: glow 9s ease-in-out infinite;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  @keyframes glow {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+      opacity: 0.55;
+    }
+    50% {
+      transform: translate(18px, -12px) scale(1.08);
+      opacity: 0.8;
+    }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Scroll reveal: phần tử hiện dần khi cuộn tới (điều khiển bởi <Reveal />) */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 html,

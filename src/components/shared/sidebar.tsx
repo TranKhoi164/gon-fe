@@ -9,6 +9,8 @@ import { PageSummary, PageTreeItem } from "@/types/notes.types";
 import { PageTreeNode } from "@/components/features/notes/page-tree-node";
 import { useAuth } from "@/context/AuthContext";
 import { ROUTES, STORAGE_KEYS } from "@/constants/routes.constants";
+import { Presence } from "@/components/ui/presence";
+import { TRANSITION_CLASSES } from "@/constants/transition.constants";
 import {
   LayoutDashboard,
   FileText,
@@ -144,7 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside
       className={cn(
-        "hidden md:flex flex-col h-[calc(100vh-2rem)] my-4 ml-4 rounded-xl bg-surface shadow-warm border-0 p-3 select-none sticky top-4 transition-all duration-200 z-30 shrink-0",
+        "hidden md:flex flex-col h-[calc(100vh-2rem)] my-4 ml-4 rounded-xl bg-surface shadow-warm border-0 p-3 select-none sticky top-4 transition-all duration-200 z-30 shrink-0 overflow-hidden",
         isCollapsed ? "w-16 items-center" : "w-64",
         className
       )}
@@ -157,7 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       >
         {!isCollapsed ? (
-          <Link href={user ? ROUTES.DASHBOARD : ROUTES.LANDING} className="flex items-center gap-2.5 min-w-0 group">
+          <Link href={user ? ROUTES.DASHBOARD : ROUTES.LANDING} className={cn("flex items-center gap-2.5 min-w-0 group", TRANSITION_CLASSES.FADE_IN)}>
             <div className="h-8 w-8 rounded-lg bg-primary text-on-primary flex items-center justify-center font-serif-display font-bold text-lg shadow-warm-xs shrink-0 transition-transform group-hover:scale-105">
               G
             </div>
@@ -173,7 +175,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ) : (
           <button
             onClick={toggleCollapse}
-            className="h-8 w-8 rounded-lg bg-primary text-on-primary flex items-center justify-center font-serif-display font-bold text-lg shadow-warm-xs hover:opacity-90 transition-opacity cursor-pointer"
+            className="h-8 w-8 rounded-lg bg-primary text-on-primary flex items-center justify-center font-serif-display font-bold text-lg shadow-warm-xs hover:opacity-90 transition-all cursor-pointer starting:opacity-0"
             title="Mở rộng sidebar"
           >
             G
@@ -184,7 +186,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={toggleCollapse}
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-secondary transition-colors cursor-pointer"
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-secondary transition-all cursor-pointer starting:opacity-0"
             title="Thu gọn sidebar"
           >
             <PanelLeftClose className="w-4 h-4" />
@@ -198,7 +200,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={onOpenFastCapture}
-            className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-surface-secondary/80 hover:bg-surface-secondary text-xs text-text-secondary hover:text-text-primary shadow-warm-xs transition-all cursor-pointer border-0"
+            className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg bg-surface-secondary/80 hover:bg-surface-secondary text-xs text-text-secondary hover:text-text-primary shadow-warm-xs transition-all cursor-pointer border-0 starting:opacity-0"
           >
             <div className="flex items-center gap-2">
               <Search className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
@@ -212,7 +214,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={onOpenFastCapture}
-            className="w-10 h-10 mx-auto flex items-center justify-center rounded-lg bg-surface-secondary/80 hover:bg-surface-secondary text-text-secondary hover:text-text-primary shadow-warm-xs transition-all cursor-pointer border-0"
+            className="w-10 h-10 mx-auto flex items-center justify-center rounded-lg bg-surface-secondary/80 hover:bg-surface-secondary text-text-secondary hover:text-text-primary shadow-warm-xs transition-all cursor-pointer border-0 starting:opacity-0"
             title="Tìm kiếm & Tạo nhanh (Ctrl+K)"
           >
             <Search className="w-4 h-4" />
@@ -223,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* 3. Navigation Links */}
       <nav className="flex-1 space-y-1 w-full overflow-y-auto pr-0.5">
         {!isCollapsed && (
-          <p className="px-2.5 pt-1 pb-1.5 text-[10px] font-semibold text-text-tertiary uppercase tracking-wider font-serif-display">
+          <p className={cn("px-2.5 pt-1 pb-1.5 text-[10px] font-semibold text-text-tertiary uppercase tracking-wider font-serif-display", TRANSITION_CLASSES.FADE_IN)}>
             Điều Hướng
           </p>
         )}
@@ -240,7 +242,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "w-10 h-10 mx-auto flex items-center justify-center rounded-lg transition-all",
+                  "w-10 h-10 mx-auto flex items-center justify-center rounded-lg transition-all starting:opacity-0",
                   isActive
                     ? "bg-primary text-on-primary shadow-warm-xs"
                     : "text-text-secondary hover:text-text-primary hover:bg-surface-secondary"
@@ -253,7 +255,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }
 
           return (
-            <div key={item.href} className="space-y-1">
+            <div key={item.href} className={cn("space-y-1", TRANSITION_CLASSES.FADE_IN)}>
               <div
                 className={cn(
                   "group flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-all",
@@ -264,7 +266,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Link
                   href={item.href}
-                  className="flex items-center gap-2.5 min-w-0 flex-1"
+                  className="flex items-center gap-2.5 min-w-0 flex-1 transition-colors duration-150"
                 >
                   <Icon className="w-4 h-4 shrink-0" />
                   <span className="truncate">{item.label}</span>
@@ -319,8 +321,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
 
               {/* Embedded Notes Hierarchy under 'Ghi chú Notion' */}
-              {showNotesTree && (
-                <div className="mt-1 mb-2 ml-2 pl-2 border-l border-border-subtle space-y-2">
+              {isNotesItem && notesProps && (
+                <Presence
+                  show={!!showNotesTree}
+                  variant="collapse"
+                  className="mt-1 mb-2 ml-2 pl-2 border-l border-border-subtle space-y-2"
+                >
                   {/* Search bar inside notes */}
                   {notesProps.onSearchChange && (
                     <div className="relative my-1">
@@ -332,26 +338,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         placeholder="Tìm kiếm trang..."
                         className="w-full pl-7 pr-6 py-1 rounded-md bg-surface-secondary/80 focus:bg-surface text-[11px] text-text-primary placeholder:text-text-tertiary focus:outline-none shadow-warm-xs transition-all"
                       />
-                      {notesProps.searchTerm && (
+                      <Presence show={!!notesProps.searchTerm} variant="pop" as="span">
                         <button
                           type="button"
                           onClick={() => notesProps.onSearchChange?.("")}
-                          className="absolute right-1.5 top-1.5 p-0.5 text-text-tertiary hover:text-text-primary rounded cursor-pointer"
+                          className="absolute right-1.5 top-1.5 p-0.5 text-text-tertiary hover:text-text-primary rounded cursor-pointer transition-colors duration-150"
                         >
                           <X className="w-2.5 h-2.5" />
                         </button>
-                      )}
+                      </Presence>
                     </div>
                   )}
 
                   {/* Favorites section */}
-                  {notesProps.favorites && notesProps.favorites.length > 0 && !notesProps.searchTerm && (
-                    <div className="space-y-0.5 pt-1">
+                  <Presence
+                    show={!!notesProps.favorites && notesProps.favorites.length > 0 && !notesProps.searchTerm}
+                    variant="collapse"
+                    className="space-y-0.5 pt-1"
+                  >
                       <p className="px-2 text-[9px] font-bold text-text-tertiary uppercase tracking-wider flex items-center gap-1">
                         <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-500" />
                         <span>Yêu thích</span>
                       </p>
-                      {notesProps.favorites.map((fav) => (
+                      {notesProps.favorites?.map((fav) => (
                         <div
                           key={fav.id}
                           onClick={() => notesProps.onSelectPage?.(fav.id)}
@@ -366,8 +375,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <span className="truncate flex-1 text-[11px]">{fav.title}</span>
                         </div>
                       ))}
-                    </div>
-                  )}
+                  </Presence>
 
                   {/* Page Tree */}
                   <div className="space-y-0.5 pt-1">
@@ -390,7 +398,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         Chưa có trang nào
                       </div>
                     ) : (
-                      <div className="space-y-0.5 max-h-56 overflow-y-auto pr-0.5">
+                      <div className={cn("space-y-0.5 max-h-56 overflow-y-auto pr-0.5", TRANSITION_CLASSES.FADE_IN)}>
                         {notesProps.tree.map((node) => (
                           <PageTreeNode
                             key={node.id}
@@ -422,19 +430,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           {notesProps.trashList.length}
                         </span>
                       </button>
-                      {isTrashOpen && (
+                      <Presence show={isTrashOpen} variant="collapse">
                         <div className="mt-1 p-1.5 rounded-lg bg-surface-secondary/70 space-y-1 text-[11px] max-h-32 overflow-y-auto">
                           {notesProps.trashList.length === 0 ? (
                             <p className="text-[10px] text-text-tertiary text-center py-1">Thùng rác trống</p>
                           ) : (
                             notesProps.trashList.map((item) => (
-                              <div key={item.id} className="flex items-center justify-between gap-1 py-0.5 px-1 rounded hover:bg-surface transition-colors">
+                              <div key={item.id} className="flex items-center justify-between gap-1 py-0.5 px-1 rounded hover:bg-surface transition-all starting:opacity-0">
                                 <span className="truncate flex-1 text-text-secondary">{item.title}</span>
                                 {notesProps.onRestorePage && (
                                   <button
                                     type="button"
                                     onClick={() => notesProps.onRestorePage?.(item.id)}
-                                    className="text-[10px] text-primary hover:underline cursor-pointer flex items-center gap-0.5 shrink-0"
+                                    className="text-[10px] text-primary hover:underline cursor-pointer flex items-center gap-0.5 shrink-0 transition-colors duration-150"
                                     title="Khôi phục"
                                   >
                                     <RotateCcw className="w-2.5 h-2.5" />
@@ -445,10 +453,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             ))
                           )}
                         </div>
-                      )}
+                      </Presence>
                     </div>
                   )}
-                </div>
+                </Presence>
               )}
             </div>
           );
@@ -459,7 +467,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {userStats && (
         <div className="my-2.5 w-full">
           {!isCollapsed ? (
-            <div className="p-2.5 rounded-lg bg-surface-secondary/70 shadow-warm-xs space-y-1.5 text-xs">
+            <div className={cn("p-2.5 rounded-lg bg-surface-secondary/70 shadow-warm-xs space-y-1.5 text-xs", TRANSITION_CLASSES.FADE_IN)}>
               <div className="flex items-center justify-between text-accent-gold font-bold">
                 <div className="flex items-center gap-1.5">
                   <Flame className="w-3.5 h-3.5 text-accent-gold" />
@@ -476,7 +484,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           ) : (
             <div
-              className="w-10 h-10 mx-auto flex flex-col items-center justify-center rounded-lg bg-surface-secondary/70 shadow-warm-xs text-accent-gold text-[10px] font-bold cursor-default"
+              className={cn("w-10 h-10 mx-auto flex flex-col items-center justify-center rounded-lg bg-surface-secondary/70 shadow-warm-xs text-accent-gold text-[10px] font-bold cursor-default", TRANSITION_CLASSES.FADE_IN)}
               title={`${userStats.streakCount} Ngày Streak • Level ${userStats.level}`}
             >
               <Flame className="w-3.5 h-3.5 text-accent-gold" />
@@ -493,12 +501,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={toggleTheme}
-            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-text-secondary hover:text-text-primary hover:bg-surface-secondary transition-all cursor-pointer border-0"
+            className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-text-secondary hover:text-text-primary hover:bg-surface-secondary transition-all cursor-pointer border-0 starting:opacity-0"
           >
             {themeMode === "light" ? (
-              <Sun className="w-3.5 h-3.5 text-accent-gold shrink-0" />
+              <Sun className={cn("w-3.5 h-3.5 text-accent-gold shrink-0", TRANSITION_CLASSES.FADE_IN)} />
             ) : (
-              <Moon className="w-3.5 h-3.5 text-primary shrink-0" />
+              <Moon className={cn("w-3.5 h-3.5 text-primary shrink-0", TRANSITION_CLASSES.FADE_IN)} />
             )}
             <span className="truncate">
               {themeMode === "light" ? "Giao diện Sáng" : "Giao diện Tối"}
@@ -508,13 +516,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={toggleTheme}
-            className="w-10 h-10 mx-auto flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-secondary transition-all cursor-pointer border-0"
+            className="w-10 h-10 mx-auto flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-secondary transition-all cursor-pointer border-0 starting:opacity-0"
             title={themeMode === "light" ? "Chuyển sang chế độ Tối" : "Chuyển sang chế độ Sáng"}
           >
             {themeMode === "light" ? (
-              <Sun className="w-4 h-4 text-accent-gold" />
+              <Sun className={cn("w-4 h-4 text-accent-gold", TRANSITION_CLASSES.FADE_IN)} />
             ) : (
-              <Moon className="w-4 h-4 text-primary" />
+              <Moon className={cn("w-4 h-4 text-primary", TRANSITION_CLASSES.FADE_IN)} />
             )}
           </button>
         )}
@@ -522,7 +530,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* User Account / Auth Section */}
         {user ? (
           !isCollapsed ? (
-            <div className="flex items-center justify-between p-1.5 rounded-lg bg-surface-secondary/50">
+            <div className={cn("flex items-center justify-between p-1.5 rounded-lg bg-surface-secondary/50", TRANSITION_CLASSES.FADE_IN)}>
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-6 h-6 rounded-full bg-primary-soft text-primary font-bold text-xs flex items-center justify-center shrink-0">
                   {user.name.charAt(0).toUpperCase()}
@@ -539,7 +547,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-1">
+            <div className={cn("flex flex-col items-center gap-1", TRANSITION_CLASSES.FADE_IN)}>
               <div
                 className="w-8 h-8 rounded-full bg-primary-soft text-primary font-bold text-xs flex items-center justify-center cursor-default"
                 title={`Tài khoản: ${user.name}`}
@@ -560,7 +568,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           !isCollapsed ? (
             <Link
               href={ROUTES.LOGIN}
-              className="w-full flex items-center justify-center gap-2 px-2.5 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-semibold shadow-warm-xs hover:bg-primary-hover transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-2.5 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-semibold shadow-warm-xs hover:bg-primary-hover transition-all starting:opacity-0"
             >
               <User className="w-3.5 h-3.5 shrink-0" />
               <span>Đăng nhập</span>
@@ -568,7 +576,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             <Link
               href={ROUTES.LOGIN}
-              className="w-10 h-10 mx-auto flex items-center justify-center rounded-lg bg-primary text-on-primary shadow-warm-xs hover:bg-primary-hover transition-colors"
+              className="w-10 h-10 mx-auto flex items-center justify-center rounded-lg bg-primary text-on-primary shadow-warm-xs hover:bg-primary-hover transition-all starting:opacity-0"
               title="Đăng nhập"
             >
               <User className="w-4 h-4" />
@@ -581,7 +589,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={toggleCollapse}
-            className="w-10 h-7 mx-auto flex items-center justify-center rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-secondary transition-colors cursor-pointer pt-1"
+            className="w-10 h-7 mx-auto flex items-center justify-center rounded-lg text-text-tertiary hover:text-text-primary hover:bg-surface-secondary transition-all cursor-pointer pt-1 starting:opacity-0"
             title="Mở rộng sidebar"
           >
             <PanelLeftOpen className="w-4 h-4" />

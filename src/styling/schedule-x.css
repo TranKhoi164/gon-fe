@@ -82,8 +82,9 @@
 /* Compact Wrapper & Scrollbar */
 .sx-react-calendar-wrapper {
   width: 100%;
-  height: 560px;
-  max-height: calc(100vh - 240px);
+  /* Gần hết chiều cao màn hình (chừa header trang), tối thiểu 640px trên màn hình thấp */
+  height: calc(100vh - 120px);
+  min-height: 640px;
 }
 
 .sx__calendar {
@@ -120,6 +121,20 @@
   background-color: var(--surface) !important;
   gap: 8px !important;
   min-height: 44px !important;
+}
+
+/* Header gộp: nút chuyển chế độ xem + Today/‹ ›/tháng | chú thích + View/Date + Tạo công việc */
+.sx__calendar-header {
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  row-gap: 8px !important;
+}
+
+.sx__calendar-header-content {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
 }
 
 .sx__range-heading {
@@ -344,6 +359,18 @@
   box-shadow: 0 2px 6px rgba(50, 40, 30, 0.08) !important;
 }
 
+/* Ô sự kiện tự vẽ (calendar-event-card.tsx) tự tô màu → bỏ padding khung ngoài, cắt theo bo góc */
+.sx__time-grid-event:has(.gon-event-card),
+.sx__date-grid-event:has(.gon-event-card),
+.sx__month-grid-event:has(.gon-event-card) {
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.sx__time-grid-event-inner:has(.gon-event-card) {
+  height: 100%;
+}
+
 /* Drag selection / Preview when clicking a slot */
 .sx__time-grid-drag-selection,
 .sx__time-grid-event-ghost,
@@ -397,4 +424,10 @@
   background-color: var(--primary) !important;
   color: var(--on-primary) !important;
   border-radius: 5px !important;
+}
+
+/* Ô sự kiện nháp khi tạo nhanh (giống Google Calendar): nổi lên trên các sự kiện khác */
+[data-event-id^="__quick_create_draft__"] {
+  z-index: 5;
+  box-shadow: 0 6px 16px rgba(45, 36, 32, 0.22);
 }

@@ -9,6 +9,8 @@ import {
 import { EISENHOWER_QUADRANTS_CONFIG } from "@/constants/dashboard.constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TRANSITION_CLASSES } from "@/constants/transition.constants";
+import { cn } from "@/lib/utils";
 import {
   LayoutGrid,
   Calendar,
@@ -26,6 +28,8 @@ export interface EisenhowerMatrixProps {
   onOpenCreateModal?: (quadrant?: EisenhowerQuadrant) => void;
   includeUnscheduled?: boolean;
   onToggleIncludeUnscheduled?: () => void;
+  /** Nội dung đặt ở đầu hàng header (vd. nút chuyển chế độ xem) */
+  headerLeading?: React.ReactNode;
 }
 
 export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
@@ -35,6 +39,7 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
   onOpenCreateModal,
   includeUnscheduled,
   onToggleIncludeUnscheduled,
+  headerLeading,
 }) => {
   const [loadingTaskId, setLoadingTaskId] = useState<string | null>(null);
 
@@ -48,10 +53,12 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Header with Title and Dedicated Separate Create Task Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface p-4 sm:p-5 rounded-xl shadow-warm border border-border">
-        <div>
+        <div className="flex items-center gap-3 min-w-0">
+          {headerLeading}
+          <div className="min-w-0">
           <h2 className="text-xl sm:text-2xl font-serif-display font-bold text-text-primary flex items-center gap-2.5 tracking-tight">
             <LayoutGrid className="w-5 h-5 text-primary stroke-[1.8]" />
             <span>Ma Trận 4 Ô Eisenhower</span>
@@ -59,6 +66,7 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
           <p className="text-xs text-text-secondary mt-0.5">
             Ưu tiên làm trước <span className="font-semibold text-accent-gold">Gold Zone</span> để gặt hái thành tựu đột phá và nhận thêm điểm thưởng XP
           </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -146,7 +154,7 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
                         checked={isDone}
                         disabled={isLoading}
                         onChange={() => handleToggle(task)}
-                        className="mt-0.5 w-4 h-4 rounded border-border accent-primary text-primary focus:ring-primary cursor-pointer disabled:opacity-50"
+                        className={cn("mt-0.5 w-4 h-4 rounded border-border accent-primary text-primary focus:ring-primary cursor-pointer disabled:opacity-50", TRANSITION_CLASSES.INTERACTIVE)}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -194,7 +202,7 @@ export const EisenhowerMatrix: React.FC<EisenhowerMatrixProps> = ({
                         {config.key === "ELIMINATE" && !isDone && onMoveToBatching ? (
                           <button
                             onClick={() => onMoveToBatching(task)}
-                            className="inline-flex items-center gap-1 text-[11px] text-text-tertiary hover:text-text-primary px-1.5 py-0.5 rounded bg-surface-tertiary border border-border"
+                            className="inline-flex items-center gap-1 text-[11px] text-text-tertiary hover:text-text-primary px-1.5 py-0.5 rounded bg-surface-tertiary border border-border transition-colors duration-150"
                             title="Chuyển vào thùng gom việc vặt 15p"
                           >
                             <Package className="w-3 h-3" />

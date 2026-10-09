@@ -9,6 +9,10 @@ import {
 } from "@/constants/landing.constants";
 import { ROUTES } from "@/constants/routes.constants";
 import { PlaygroundDemoTask, MascotMood } from "@/types/landing.types";
+import { Presence } from "@/components/ui/presence";
+import { useRetainedValue } from "@/hooks/usePresence";
+import { TRANSITION_CLASSES } from "@/constants/transition.constants";
+import { cn } from "@/lib/utils";
 import { GonMiniMascot } from "./gon-mascot-card";
 
 export const InteractivePlayground: React.FC = () => {
@@ -20,6 +24,8 @@ export const InteractivePlayground: React.FC = () => {
   const [customConcept, setCustomConcept] = useState<string>("");
   const [isFeynmanized, setIsFeynmanized] = useState<boolean>(true);
   const [floatingXpMsg, setFloatingXpMsg] = useState<string | null>(null);
+  // Giữ nội dung toast XP trong lúc chạy exit transition
+  const displayedXpMsg = useRetainedValue(floatingXpMsg);
   const [mascotMood, setMascotMood] = useState<MascotMood>("locking-in");
   const [pushedActionIds, setPushedActionIds] = useState<string[]>([]);
 
@@ -140,11 +146,12 @@ export const InteractivePlayground: React.FC = () => {
 
           {/* Live Gamified Meter */}
           <div className="rounded-lg bg-surface-secondary border border-border dark:border-white/[0.08] p-3.5 min-w-[250px] relative">
-            {floatingXpMsg && (
-              <div className="absolute -top-8 right-2 px-2.5 py-1 rounded-md bg-primary text-on-primary text-[11px] font-mono font-bold shadow-sm whitespace-nowrap z-20">
-                {floatingXpMsg}
-              </div>
-            )}
+            <Presence
+              show={!!floatingXpMsg}
+              className="absolute -top-8 right-2 px-2.5 py-1 rounded-md bg-primary text-on-primary text-[11px] font-mono font-bold shadow-sm whitespace-nowrap z-20"
+            >
+              {displayedXpMsg}
+            </Presence>
             <div className="flex items-center justify-between text-xs font-mono font-bold mb-1.5">
               <span className="text-primary">
                 ⭐ Lv.{level} • {level >= 2 ? "Người Kỷ Luật" : "Tập Sự Gọn"}
@@ -218,7 +225,7 @@ export const InteractivePlayground: React.FC = () => {
                   value={customConcept}
                   onChange={(e) => setCustomConcept(e.target.value)}
                   placeholder="Hoặc tự nhập kỹ năng bạn đang học..."
-                  className="flex-1 px-3 py-2 rounded-md bg-surface border border-border dark:border-white/[0.08] text-xs sm:text-sm text-text-primary focus:outline-none focus:border-primary"
+                  className={cn("flex-1 px-3 py-2 rounded-md bg-surface border border-border dark:border-white/[0.08] text-xs sm:text-sm text-text-primary focus:outline-none focus:border-primary", TRANSITION_CLASSES.INTERACTIVE)}
                 />
                 <button
                   type="submit"
@@ -229,7 +236,7 @@ export const InteractivePlayground: React.FC = () => {
               </form>
 
               {/* Output Card */}
-              {isFeynmanized && (
+              <Presence show={isFeynmanized} variant="collapse">
                 <div className="rounded-lg bg-butter-surface border border-butter-border dark:border-white/[0.08] p-3.5 space-y-3">
                   <div>
                     <p className="text-[10px] font-mono font-bold uppercase tracking-wider text-text-tertiary">
@@ -269,7 +276,7 @@ export const InteractivePlayground: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              )}
+              </Presence>
             </div>
           </div>
 
@@ -306,7 +313,7 @@ export const InteractivePlayground: React.FC = () => {
                       type="checkbox"
                       checked={task.completed}
                       onChange={() => {}}
-                      className="mt-0.5 w-3.5 h-3.5 accent-primary rounded-xs cursor-pointer"
+                      className={cn("mt-0.5 w-3.5 h-3.5 accent-primary rounded-xs cursor-pointer", TRANSITION_CLASSES.INTERACTIVE)}
                     />
                     <div className="flex-1 min-w-0">
                       <p

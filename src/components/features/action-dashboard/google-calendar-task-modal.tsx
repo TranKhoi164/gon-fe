@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { Temporal } from "temporal-polyfill";
 import {
   TaskType,
   EisenhowerQuadrant,
@@ -15,6 +14,9 @@ import {
   formatRecurrenceSummary,
   generateRecurrenceDates,
   recurrenceConfigToRRule,
+  buildPresetRecurrence,
+  getRecurrencePreset,
+  RecurrencePreset,
 } from "@/utils/recurrence";
 import { CustomRecurrenceModal } from "./custom-recurrence-modal";
 import {
@@ -24,12 +26,29 @@ import {
   AlignLeft,
   Sparkles,
   Repeat,
-  ChevronDown,
-  Calendar,
   Flame,
   UserCheck,
   Trash2,
 } from "lucide-react";
+import { DialogShell } from "@/components/ui/dialog-shell";
+import { TRANSITION_CLASSES } from "@/constants/transition.constants";
+import { TimePicker } from "@/components/ui/time-picker";
+import { DatePicker } from "@/components/ui/date-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/shadcn/select";
+import { cn } from "@/lib/utils";
+import { FIELD_TRIGGER_CLASS } from "@/constants/picker.constants";
+import {
+  QUICK_CREATE_ALL_DAY_END,
+  QUICK_CREATE_ALL_DAY_START,
+  QUICK_CREATE_RECURRENCE_OPTIONS,
+} from "@/constants/calendar-quick-create.constants";
+import { Presence, PresenceMount } from "@/components/ui/presence";
 
 export interface GoogleCalendarTaskModalProps {
   isOpen: boolean;
@@ -94,11 +113,15 @@ const QUADRANT_OPTIONS = [
 ];
 
 export const GoogleCalendarTaskModal: React.FC<GoogleCalendarTaskModalProps> = (props) => {
-  if (!props.isOpen) return null;
-  return <GoogleCalendarTaskModalContent {...props} />;
+  return (
+    <PresenceMount open={props.isOpen}>
+      <GoogleCalendarTaskModalContent {...props} />
+    </PresenceMount>
+  );
 };
 
 const GoogleCalendarTaskModalContent: React.FC<GoogleCalendarTaskModalProps> = ({
+  isOpen,
   onClose,
   onSaveTask,
   initialDate,
@@ -156,38 +179,9 @@ const GoogleCalendarTaskModalContent: React.FC<GoogleCalendarTaskModalProps> = (
   const recurrenceSummary = formatRecurrenceSummary(recurrence);
 
   const handleQuickRecurrenceChange = (value: string) => {
-    if (value === "none") {
-      setRecurrence(null);
-    } else if (value === "daily") {
-      setRecurrence({
-        interval: 1,
-        unit: "day",
-        daysOfWeek: [],
-        endType: "never",
-      });
-    } else if (value === "weekly") {
-      let day = 1;
-      try {
-        day = Temporal.PlainDate.from(scheduledDate).dayOfWeek % 7;
-      } catch {
-        day = scheduledDate ? new Date(scheduledDate).getDay() : 1;
-      }
-      setRecurrence({
-        interval: 1,
-        unit: "week",
-        daysOfWeek: [day],
-        endType: "never",
-      });
-    } else if (value === "monthly") {
-      setRecurrence({
-        interval: 1,
-        unit: "month",
-        daysOfWeek: [],
-        endType: "never",
-      });
-    } else if (value === "custom") {
-      setIsCustomRecurrenceOpen(true);
-    }
+    const config = buildPresetRecurrence(value as RecurrencePreset, scheduledDate);
+    if (config === undefined) setIsCustomRecurrenceOpen(true);
+    else setRecurrence(config);
   };
 
   const handleSave = async () => {
@@ -206,8 +200,8 @@ const GoogleCalendarTaskModalContent: React.FC<GoogleCalendarTaskModalProps> = (
         type: taskType,
         quadrant,
         scheduledDate,
-        startTime: isAllDay ? "00:00" : startTime,
-        endTime: isAllDay ? "23:59" : endTime,
+        startTime: isAllDay ? QUICK_CREATE_ALL_DAY_START : startTime,
+        endTime: isAllDay ? QUICK_CREATE_ALL_DAY_END : endTime,
         estimatedMinutes,
         rrule,
         recurrence,
@@ -225,12 +219,12 @@ const GoogleCalendarTaskModalContent: React.FC<GoogleCalendarTaskModalProps> = (
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/45 backdrop-blur-xs animate-in fade-in duration-150">
-        <div
-          className="w-full max-w-lg rounded-xl bg-surface border border-border shadow-warm-lg overflow-hidden flex flex-col text-text-primary animate-in zoom-in-95 duration-200"
-          role="dialog"
-          aria-modal="true"
-        >
+      <DialogShell
+        open={isOpen}
+        onClose={isCustomRecurrenceOpen ? undefined : onClose}
+        overlayClassName="p-3 sm:p-4"
+        className="max-w-lg overflow-hidden flex flex-col"
+      >
           {/* Top Bar with Drag Handle & Close */}
           <div className="flex items-center justify-between px-5 pt-3.5 pb-2 text-text-tertiary">
             <div className="flex items-center gap-1.5 opacity-70">
@@ -343,40 +337,24 @@ const GoogleCalendarTaskModalContent: React.FC<GoogleCalendarTaskModalProps> = (
 
                 {/* Date and Time Inputs */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-1.5 bg-surface-secondary px-2.5 py-1.5 rounded-lg border border-border">
-                    <Calendar className="w-3.5 h-3.5 text-text-tertiary stroke-[1.8]" />
-                    <input
-                      type="date"
-                      value={scheduledDate}
-                      onChange={(e) => setScheduledDate(e.target.value)}
-                      className="bg-transparent text-xs text-text-primary focus:outline-none"
-                    />
-                  </div>
+                  <DatePicker value={scheduledDate} onChange={setScheduledDate} className="rounded-lg" />
 
-                  {!isAllDay && (
-                    <div className="flex items-center gap-1 bg-surface-secondary px-2 py-1.5 rounded-lg border border-border">
-                      <input
-                        type="time"
-                        value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
-                        className="bg-transparent text-xs text-text-primary focus:outline-none"
-                      />
+                  <Presence
+                    show={!isAllDay}
+                    variant="pop"
+                    className="flex items-center gap-1"
+                  >
+                      <TimePicker value={startTime} onChange={setStartTime} className="rounded-lg" />
                       <span className="text-text-tertiary text-xs">–</span>
-                      <input
-                        type="time"
-                        value={endTime}
-                        onChange={(e) => setEndTime(e.target.value)}
-                        className="bg-transparent text-xs text-text-primary focus:outline-none"
-                      />
-                    </div>
-                  )}
+                      <TimePicker value={endTime} onChange={setEndTime} durationFrom={startTime} className="rounded-lg" />
+                  </Presence>
 
                   <label className="flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer ml-1 select-none">
                     <input
                       type="checkbox"
                       checked={isAllDay}
                       onChange={(e) => setIsAllDay(e.target.checked)}
-                      className="w-3.5 h-3.5 rounded border-border accent-primary text-primary focus:ring-primary cursor-pointer"
+                      className={cn("w-3.5 h-3.5 rounded border-border accent-primary text-primary focus:ring-primary cursor-pointer", TRANSITION_CLASSES.INTERACTIVE)}
                     />
                     <span>Cả ngày</span>
                   </label>
@@ -385,37 +363,40 @@ const GoogleCalendarTaskModalContent: React.FC<GoogleCalendarTaskModalProps> = (
                 {/* Recurrence Dropdown / Trigger */}
                 <div className="flex items-center gap-2 pt-1">
                   <Repeat className="w-3.5 h-3.5 text-text-tertiary stroke-[1.8]" />
-                  <div className="relative flex-1">
-                    <select
-                      value={recurrence ? (recurrence.interval === 1 && recurrence.endType === "never" && recurrence.unit === "day" ? "daily" : recurrence.unit === "week" && recurrence.interval === 1 && recurrence.endType === "never" ? "weekly" : "custom") : "none"}
-                      onChange={(e) => handleQuickRecurrenceChange(e.target.value)}
-                      className="w-full appearance-none text-xs font-medium bg-surface-secondary text-text-primary border border-border rounded-lg px-2.5 py-1.5 pr-7 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                  <div className="flex-1">
+                    <Select
+                      value={getRecurrencePreset(recurrence)}
+                      onValueChange={handleQuickRecurrenceChange}
                     >
-                      <option value="none">Không lặp lại</option>
-                      <option value="daily">Hàng ngày</option>
-                      <option value="weekly">Hàng tuần vào ngày này</option>
-                      <option value="monthly">Hàng tháng</option>
-                      <option value="custom">Tùy chỉnh lặp lại...</option>
-                    </select>
-                    <ChevronDown className="w-3.5 h-3.5 text-text-tertiary absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none stroke-[1.8]" />
+                      <SelectTrigger size="sm" className={cn(FIELD_TRIGGER_CLASS, "w-full font-medium")}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent position="popper">
+                        {QUICK_CREATE_RECURRENCE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  {recurrence && (
+                  <Presence show={!!recurrence} variant="pop" as="span">
                     <button
                       type="button"
                       onClick={() => setIsCustomRecurrenceOpen(true)}
-                      className="text-[11px] text-primary hover:text-primary-hover hover:underline font-semibold whitespace-nowrap"
+                      className="text-[11px] text-primary hover:text-primary-hover hover:underline font-semibold whitespace-nowrap transition-colors duration-150"
                     >
                       Sửa quy tắc
                     </button>
-                  )}
+                  </Presence>
                 </div>
 
-                {recurrence && (
+                <Presence show={!!recurrence} variant="collapse">
                   <p className="text-[11px] text-primary bg-primary-soft px-2.5 py-1 rounded-md border border-primary/20 font-medium">
                     🔁 {recurrenceSummary}
                   </p>
-                )}
+                </Presence>
               </div>
             </div>
 
@@ -474,10 +455,9 @@ const GoogleCalendarTaskModalContent: React.FC<GoogleCalendarTaskModalProps> = (
               {isSubmitting ? "Đang lưu..." : "Lưu công việc"}
             </button>
           </div>
-        </div>
-      </div>
+      </DialogShell>
 
-      {/* Nested Custom Recurrence Modal */}
+      {/* Nested Custom Recurrence Modal — nằm ngoài DialogShell vì backdrop-blur/scale tạo containing block cho fixed */}
       <CustomRecurrenceModal
         isOpen={isCustomRecurrenceOpen}
         onClose={() => setIsCustomRecurrenceOpen(false)}

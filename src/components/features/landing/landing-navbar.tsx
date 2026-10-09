@@ -5,6 +5,7 @@ import Link from "next/link";
 import { SITE_CONFIG } from "@/config/site.config";
 import { LANDING_NAV_LINKS } from "@/constants/landing.constants";
 import { ROUTES, STORAGE_KEYS } from "@/constants/routes.constants";
+import { cn } from "@/lib/utils";
 
 export const LandingNavbar: React.FC = () => {
   const [themeMode, setThemeMode] = useState<"light" | "dark">(() => {
@@ -18,10 +19,19 @@ export const LandingNavbar: React.FC = () => {
     return "light";
   });
 
+  const [isScrolled, setIsScrolled] = useState(false);
+
   useEffect(() => {
     document.documentElement.classList.remove("light", "dark");
     document.documentElement.classList.add(themeMode);
   }, [themeMode]);
+
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.scrollY > 8);
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const handleToggleTheme = () => {
     const nextTheme = themeMode === "light" ? "dark" : "light";
@@ -30,11 +40,18 @@ export const LandingNavbar: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-surface/90 backdrop-blur-md border-b border-border dark:border-white/[0.08]">
+    <header
+      className={cn(
+        "sticky top-0 z-50 w-full backdrop-blur-md border-b transition-all duration-300",
+        isScrolled
+          ? "bg-surface/90 border-border dark:border-white/[0.08] shadow-warm-sm"
+          : "bg-background/60 border-transparent"
+      )}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
         {/* Brand Logo + Monospace Tag */}
-        <Link href={ROUTES.LANDING} className="flex items-center gap-2.5">
-          <div className="h-7 w-7 rounded-md bg-primary text-on-primary flex items-center justify-center font-mono font-black text-sm">
+        <Link href={ROUTES.LANDING} className="group flex items-center gap-2.5 transition-colors duration-150">
+          <div className="h-7 w-7 rounded-md bg-primary text-on-primary flex items-center justify-center font-mono font-black text-sm transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-105">
             G
           </div>
           <div className="flex items-center gap-2">
@@ -53,7 +70,7 @@ export const LandingNavbar: React.FC = () => {
             <a
               key={item.href}
               href={item.href}
-              className="hover:text-text-primary transition-colors"
+              className="relative py-1 hover:text-text-primary transition-colors after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-primary after:transition-transform after:duration-300 hover:after:scale-x-100"
             >
               {item.label}
             </a>
@@ -87,7 +104,7 @@ export const LandingNavbar: React.FC = () => {
 
           <Link
             href={ROUTES.REGISTER}
-            className="px-3.5 py-1.5 rounded-md bg-primary hover:bg-primary-hover text-on-primary text-xs font-semibold transition-colors"
+            className="px-3.5 py-1.5 rounded-md bg-primary hover:bg-primary-hover text-on-primary text-xs font-semibold shadow-warm-xs transition-all duration-300 hover:-translate-y-px hover:shadow-warm-sm"
           >
             Bắt đầu miễn phí
           </Link>

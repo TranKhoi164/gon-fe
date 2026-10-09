@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { EisenhowerQuadrant, TaskType } from "@/types/dashboard.types";
 import { EisenhowerQuadrantEnum, TaskTypeEnum } from "@/constants/dashboard.enums";
 import { UI_MESSAGES } from "@/constants/messages.constants";
+import { TRANSITION_CLASSES } from "@/constants/transition.constants";
+import { cn } from "@/lib/utils";
 import { Plus, Sparkles, Flame, UserCheck, Trash2, LayoutGrid, Package } from "lucide-react";
 
 export interface FastCaptureModalProps {
@@ -88,7 +90,7 @@ export const FastCaptureModal: React.FC<FastCaptureModalProps> = ({
         </div>
 
         {taskType === TaskTypeEnum.EISENHOWER ? (
-          <div className="space-y-1.5">
+          <div className={cn("space-y-1.5", TRANSITION_CLASSES.FADE_IN)}>
             <label className="text-xs font-semibold text-text-secondary">
               Phân loại ô ưu tiên:
             </label>
@@ -156,7 +158,7 @@ export const FastCaptureModal: React.FC<FastCaptureModalProps> = ({
             </div>
           </div>
         ) : (
-          <div className="p-3 rounded-lg bg-accent-gold-soft/50 border border-accent-gold/20 text-xs text-text-secondary">
+          <div className={cn("p-3 rounded-lg bg-accent-gold-soft/50 border border-accent-gold/20 text-xs text-text-secondary", TRANSITION_CLASSES.FADE_IN)}>
             Công việc này sẽ được chuyển vào <strong className="text-text-primary">Thùng Gom Việc Vặt</strong> để xử lý tập trung trong phiên 15 phút.
           </div>
         )}

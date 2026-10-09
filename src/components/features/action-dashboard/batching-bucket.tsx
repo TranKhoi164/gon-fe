@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
+import { TRANSITION_CLASSES } from "@/constants/transition.constants";
+import { cn } from "@/lib/utils";
 import { Package, Zap, Pin, CheckCircle2, Clock } from "lucide-react";
 
 export interface BatchingBucketProps {
@@ -173,7 +175,7 @@ export const BatchingBucket: React.FC<BatchingBucketProps> = ({
                   type="checkbox"
                   checked={selectedTaskIds.includes(task.id)}
                   onChange={() => handleToggleSelect(task.id)}
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  className={cn("h-4 w-4 rounded border-border text-primary focus:ring-primary", TRANSITION_CLASSES.INTERACTIVE)}
                 />
                 <span className="font-medium text-text-primary flex-1">{task.title}</span>
                 <Badge variant="emerald">+10 XP</Badge>

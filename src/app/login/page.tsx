@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { Presence } from "@/components/ui/presence";
+import { useRetainedValue } from "@/hooks/usePresence";
 import { ROUTES } from "@/constants/routes.constants";
 
 export default function AuthPage() {
@@ -20,6 +22,9 @@ export default function AuthPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Giữ nội dung thông báo trong lúc chạy exit transition
+  const displayedError = useRetainedValue(errorMessage);
+  const displayedSuccess = useRetainedValue(successMessage);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,22 +165,21 @@ export default function AuthPage() {
             </div>
 
             {/* Error & Success Messages */}
-            {errorMessage && (
+            <Presence show={!!errorMessage} variant="collapse">
               <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs font-medium">
-                ⚠️ {errorMessage}
+                ⚠️ {displayedError}
               </div>
-            )}
+            </Presence>
 
-            {successMessage && (
+            <Presence show={!!successMessage} variant="collapse">
               <div className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
-                ✅ {successMessage}
+                ✅ {displayedSuccess}
               </div>
-            )}
+            </Presence>
 
             {/* Auth Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
-              {mode === "register" && (
-                <div>
+              <Presence show={mode === "register"} variant="collapse">
                   <label className="block text-xs font-semibold uppercase text-[var(--text-tertiary)] mb-1.5">
                     Họ và tên
                   </label>
@@ -187,8 +191,7 @@ export default function AuthPage() {
                     onChange={(e) => setName(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl bg-[var(--surface)] border border-[var(--border)] focus:border-[var(--primary)] text-sm outline-none transition"
                   />
-                </div>
-              )}
+              </Presence>
 
               <div>
                 <label className="block text-xs font-semibold uppercase text-[var(--text-tertiary)] mb-1.5">
@@ -220,7 +223,7 @@ export default function AuthPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors duration-150"
                   >
                     {showPassword ? "Ẩn" : "Hiện"}
                   </button>
@@ -247,7 +250,7 @@ export default function AuthPage() {
                   <button
                     type="button"
                     onClick={() => setMode("register")}
-                    className="text-[var(--primary)] font-semibold hover:underline"
+                    className="text-[var(--primary)] font-semibold hover:underline transition-colors duration-150"
                   >
                     Tạo tài khoản ngay
                   </button>
@@ -258,7 +261,7 @@ export default function AuthPage() {
                   <button
                     type="button"
                     onClick={() => setMode("login")}
-                    className="text-[var(--primary)] font-semibold hover:underline"
+                    className="text-[var(--primary)] font-semibold hover:underline transition-colors duration-150"
                   >
                     Đăng nhập tại đây
                   </button>

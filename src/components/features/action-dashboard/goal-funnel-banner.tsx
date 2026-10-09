@@ -7,6 +7,18 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Presence } from "@/components/ui/presence";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/shadcn/select";
+
+const NO_PARENT_VALUE = "__none__";
+import { FIELD_TRIGGER_CLASS } from "@/constants/picker.constants";
+import { cn } from "@/lib/utils";
 import {
   Target,
   Trophy,
@@ -183,20 +195,25 @@ export const GoalFunnelBanner: React.FC<GoalFunnelBannerProps> = ({
             className="flex-1 text-xs"
           />
 
-          {parentCandidates.length > 0 ? (
-            <select
-              value={selectedParentId}
-              onChange={(e) => setSelectedParentId(e.target.value)}
-              className="px-3 py-2 text-xs rounded-lg border border-border bg-surface text-text-secondary focus:outline-none focus:ring-1 focus:ring-primary"
+          <Presence show={parentCandidates.length > 0} variant="pop">
+            {/* Radix Select không nhận value rỗng → dùng giá trị đại diện cho "không chọn" */}
+            <Select
+              value={selectedParentId || NO_PARENT_VALUE}
+              onValueChange={(v) => setSelectedParentId(v === NO_PARENT_VALUE ? "" : v)}
             >
-              <option value="">Thuộc mục tiêu cha (Tùy chọn)</option>
-              {parentCandidates.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
-                </option>
-              ))}
-            </select>
-          ) : null}
+              <SelectTrigger className={cn(FIELD_TRIGGER_CLASS, "h-9 bg-surface text-text-secondary")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem value={NO_PARENT_VALUE} className="text-xs">Thuộc mục tiêu cha (Tùy chọn)</SelectItem>
+                {parentCandidates.map((p) => (
+                  <SelectItem key={p.id} value={p.id} className="text-xs">
+                    {p.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Presence>
 
           <Button type="submit" size="sm" isLoading={isAdding} disabled={!newGoalTitle.trim()}>
             Thêm
